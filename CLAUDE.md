@@ -12,7 +12,7 @@ Everything runs on Cloudflare. There is no other server, database or build tool.
 | API | Workers | `src/worker.js` | Only `/api/*` runs code (`run_worker_first` in `wrangler.jsonc`) |
 | Rooms | Durable Objects (SQLite-backed), class `Room` | `src/worker.js` | One per 6-char room code. Holds up to 10 WebSockets (hibernation API), relays player state and WebRTC signalling |
 | Matchmaking | Durable Objects, class `Matchmaker` | `src/worker.js` | One per continent (from `request.cf`). Fills the fullest open public room first |
-| Player counts | Durable Objects, class `Census` | `src/worker.js` `/api/online` | One global instance. Every room reports its count on join/leave; quiet rooms are re-checked so a crashed room can't leave a stale number. Feeds the first screen and the in-match "online" line |
+| Player counts | Durable Objects, class `Census` | `src/worker.js` `/api/online` | One global instance. Every room reports its count on join/leave; quiet rooms are re-checked so a crashed room can't leave a stale number. Feeds the global numbers on the first screen. The in-match "N in this match" line doesn't use it: `net.js` counts that live from the room connection |
 | Voice | Realtime STUN/TURN | `src/worker.js` `/api/ice` | Free STUN by default; TURN when the `TURN_KEY_ID` / `TURN_KEY_API_TOKEN` secrets are set. Audio itself is peer-to-peer WebRTC |
 | Domain | Workers Custom Domain | `wrangler.jsonc` `routes` | `cod.rabeeta.xyz` on the `rabeeta.xyz` zone. `workers.dev` and preview URLs are off |
 | Logs | Workers Observability | `wrangler.jsonc` | On |

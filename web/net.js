@@ -679,17 +679,18 @@
       };
     })();
 
-    // players online, shown under the tally while you're in an online match. Asks the server every 15 s, and soon after
-    // someone joins or leaves this room. Never shows fewer than the players in your own room.
+    // players in your match, shown under the tally while you play online. Live from the room connection: counts you plus
+    // everyone in the same mode (in a private room, players still in the lobby or in the other mode aren't counted).
     const online = (() => {
       const el = document.createElement('div'); el.className = 'net-online'; el.hidden = true;
-      el.innerHTML = '<i></i><span><b></b> online</span><span class="here"></span>';
-      const numEl = el.querySelector('b'), hereEl = el.querySelector('.here');
-      let n = 0, at = 0, polledCount = -1, inflight = false;
-      async function poll() {
-        inflight = true; polledCount = count;
-        const s = await fetchStats(); if (s) n = s.online;
-        at = Date.now(); inflight = false;
+      el.innerHTML = '<i></i><span><b></b> in this match</span>';
+      const numEl = el.querySelector('b');
+      const live = p => p && (p.m === 'dm' || p.m === 'tdm') && Array.isArray(p.p);
+      function inMatch() {
+        if (!room || !room.connected()) return 0;
+        const mine = room.mine() || {};
+        if (!live(mine)) return 1;
+        return room.peers().filter(x => x.sameTab || (live(x.presence) && x.presence.m === mine.m)).length;
       }
       return (show) => {
         const box = document.querySelector('#ui .h-obj');
@@ -697,11 +698,8 @@
         if (show && el.parentNode !== box) box.appendChild(el);
         if (el.hidden === show) el.hidden = !show;
         if (!show) return;
-        const age = Date.now() - at;
-        if (!inflight && (age > 15000 || (count !== polledCount && age > 2000))) poll();
-        const num = String(Math.max(n, count)), here = count > 1 ? '· ' + count + ' here' : '';
+        const num = String(Math.max(1, inMatch()));
         if (numEl.textContent !== num) numEl.textContent = num;
-        if (hereEl.textContent !== here) hereEl.textContent = here;
       };
     })();
 
