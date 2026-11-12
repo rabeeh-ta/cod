@@ -18,10 +18,14 @@
   "durable_objects": {
     "bindings": [
       { "name": "ROOMS", "class_name": "Room" },
-      { "name": "MATCH", "class_name": "Matchmaker" }
+      { "name": "MATCH", "class_name": "Matchmaker" },
+      { "name": "CENSUS", "class_name": "Census" }
     ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "Matchmaker"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Room", "Matchmaker"] },
+    { "tag": "v2", "new_sqlite_classes": ["Census"] }
+  ],
   // optional, for voice behind strict NATs: Cloudflare Realtime TURN key
   //   wrangler secret put TURN_KEY_ID   ·   wrangler secret put TURN_KEY_API_TOKEN
   "observability": { "enabled": true }

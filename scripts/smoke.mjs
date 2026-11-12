@@ -93,6 +93,10 @@ ok(bad.msgs.some(m => m.t === 'error' && m.code === 'not_found'), 'joining an un
   const qs = [];
   for (let i = 0; i < 10; i++) { const c = client(q1, 30 + i); qs.push(c); await c.ready; await c.hello(); }
   await sleep(300);
+  const st = await (await fetch(base + '/api/online')).json();
+  ok(st.dm.players >= 10 && st.dm.matches >= 1, `online counts quick-play players (${st.dm.players} in ${st.dm.matches} matches)`);
+  ok(st.rooms.rooms >= 1 && st.rooms.players >= 1, `online counts private rooms (${st.rooms.rooms} rooms, ${st.rooms.players} players)`);
+  ok(st.online === st.dm.players + st.rooms.players, `online is the sum (${st.online})`);
   const q3 = (await (await fetch(base + '/api/quick', { method: 'POST' })).json()).code;
   ok(CODE.test(q3) && q3 !== q1, `a full public room is skipped (${q3})`);
   for (const c of qs) c.ws.close();

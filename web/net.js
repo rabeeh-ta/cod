@@ -464,6 +464,19 @@
         font: 600 15px/1 var(--f-label, sans-serif); letter-spacing: .04em; color: var(--bone, #e8e4da); text-shadow: var(--shadow); }
       .net-talk i { width: 10px; height: 10px; border-radius: 50%; background: var(--signal, #ffb347); animation: net-pulse .7s ease-in-out infinite; }
 
+      /* players online: a line under the match tally in the objective box */
+      .net-online { display: flex; align-items: center; gap: 7px; margin-top: 7px; font: 600 11px/1 var(--f-label, sans-serif); letter-spacing: .22em;
+        text-transform: uppercase; color: rgba(232, 228, 218, .72); text-shadow: var(--shadow); }
+      .net-online[hidden] { display: none; }
+      .net-online i { width: 6px; height: 6px; border-radius: 50%; background: var(--signal, #ffb347); animation: net-pulse 2.4s ease-in-out infinite; }
+      .net-online b { font-weight: 600; color: var(--bone, #e8e4da); }
+
+      /* live numbers on the first screen */
+      .net-live { display: inline-flex; align-items: center; gap: 8px; color: var(--bone, #e8e4da); }
+      .net-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--signal, #ffb347); animation: net-pulse 2.4s ease-in-out infinite; }
+      .net-mode em { grid-column: 1; margin-top: 4px; font: 500 11px/1.2 var(--f-mono, monospace); font-style: normal; letter-spacing: .12em; text-transform: uppercase; color: var(--signal, #ffb347); }
+      .net-mode em:empty { display: none; }
+
       /* while the first screen is up, only the 3D scene shows behind it */
       html.net-gate-open #ui, html.net-gate-open #boot { visibility: hidden; }
       /* quick play has no room lobby: the first screen is home, so the game's title screen must never paint, not even for a frame */
@@ -477,12 +490,12 @@
     gate.className = 'net-gate'; gate.hidden = true;
     gate.innerHTML = `
       <div class="net-card">
-        <div class="net-eyebrow"><span class="tag">B4</span><span>Up to 10 players a match</span></div>
+        <div class="net-eyebrow"><span class="tag">B4</span><span data-net-stat="online">Up to 10 players a match</span></div>
         <h1 class="net-word">SALTLINE</h1>
         <label class="net-name"><span>Your name</span><input class="net-in" data-net="name" maxlength="16" placeholder="Breacher" autocomplete="off" spellcheck="false"></label>
         <div class="net-modes">
-          <button type="button" class="net-mode lead" data-net="dm"><b>Deathmatch</b><span>Jump into an open match. Everyone for themselves.</span><i>&rarr;</i></button>
-          <button type="button" class="net-mode" data-net="room" aria-expanded="false"><b>Room</b><span>Play with friends. Make a room and share the code.</span><i>+</i></button>
+          <button type="button" class="net-mode lead" data-net="dm"><b>Deathmatch</b><span>Jump into an open match. Everyone for themselves.</span><em data-net-stat="dm"></em><i>&rarr;</i></button>
+          <button type="button" class="net-mode" data-net="room" aria-expanded="false"><b>Room</b><span>Play with friends. Make a room and share the code.</span><em data-net-stat="rooms"></em><i>+</i></button>
           <form class="net-room" hidden novalidate>
             <button type="button" class="net-btn primary" data-net="create">Create a room</button>
             <div class="net-k">or join with a code</div>
@@ -638,6 +651,60 @@
       g.events.on('game:state', e => { if (e && e.state === 'title' && session.kind === 'public' && !joiningDm) showGate(); });
     })();
 
+    // /api/online -> { online, dm: {players, matches}, rooms: {players, rooms} }, or null when the server can't be reached
+    async function fetchStats() {
+      try { const r = await fetch('/api/online', { cache: 'no-store' }); return r.ok ? await r.json() : null; } catch { return null; }
+    }
+    const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+
+    // live numbers on the first screen: who's online, how many in Deathmatch, how many rooms are going.
+    // Refreshed every 10 s while the screen is up.
+    const gateStats = (() => {
+      const onlineEl = $('[data-net-stat="online"]'), dmEl = $('[data-net-stat="dm"]'), roomsEl = $('[data-net-stat="rooms"]');
+      const fallback = onlineEl.textContent;
+      let at = 0, inflight = false;
+      function render(s) {
+        if (!s || !s.online) { onlineEl.textContent = fallback; dmEl.textContent = ''; roomsEl.textContent = ''; return; }
+        onlineEl.textContent = '';
+        const live = document.createElement('span'); live.className = 'net-live';
+        live.append(document.createElement('i'), s.online + ' online now');
+        onlineEl.appendChild(live);
+        dmEl.textContent = s.dm.players ? plural(s.dm.players, 'player', 'players') + ' in ' + plural(s.dm.matches, 'match', 'matches') : '';
+        roomsEl.textContent = s.rooms.rooms ? plural(s.rooms.rooms, 'room', 'rooms') + ' going · ' + plural(s.rooms.players, 'player', 'players') : '';
+      }
+      return () => {
+        if (gate.hidden || inflight || Date.now() - at < 10000) return;
+        inflight = true;
+        fetchStats().then(s => { render(s); at = Date.now(); inflight = false; });
+      };
+    })();
+
+    // players online, shown under the tally while you're in an online match. Asks the server every 15 s, and soon after
+    // someone joins or leaves this room. Never shows fewer than the players in your own room.
+    const online = (() => {
+      const el = document.createElement('div'); el.className = 'net-online'; el.hidden = true;
+      el.innerHTML = '<i></i><span><b></b> online</span><span class="here"></span>';
+      const numEl = el.querySelector('b'), hereEl = el.querySelector('.here');
+      let n = 0, at = 0, polledCount = -1, inflight = false;
+      async function poll() {
+        inflight = true; polledCount = count;
+        const s = await fetchStats(); if (s) n = s.online;
+        at = Date.now(); inflight = false;
+      }
+      return (show) => {
+        const box = document.querySelector('#ui .h-obj');
+        show = show && !!box && box.classList.contains('has');
+        if (show && el.parentNode !== box) box.appendChild(el);
+        if (el.hidden === show) el.hidden = !show;
+        if (!show) return;
+        const age = Date.now() - at;
+        if (!inflight && (age > 15000 || (count !== polledCount && age > 2000))) poll();
+        const num = String(Math.max(n, count)), here = count > 1 ? '· ' + count + ' here' : '';
+        if (numEl.textContent !== num) numEl.textContent = num;
+        if (hereEl.textContent !== here) hereEl.textContent = here;
+      };
+    })();
+
     // a few times a second: which overlay belongs on screen, and who is talking
     let talkSig = '';
     setInterval(() => {
@@ -649,6 +716,8 @@
       const room = document.querySelector('[data-net-room]');
       const roomText = session.code && session.kind !== 'dead' ? (session.kind === 'public' ? 'Open match' : 'Room ' + session.code) : 'Online room';
       if (room && room.textContent !== roomText) room.textContent = roomText;
+      online((session.kind === 'public' || session.kind === 'private') && (st === 'playing' || st === 'paused'));
+      gateStats();
       const names = st === 'playing' || st === 'paused' || onTitle ? voice.tick() : [];
       const sig = names.join('|');
       if (sig !== talkSig) {

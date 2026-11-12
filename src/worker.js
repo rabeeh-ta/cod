@@ -4,6 +4,8 @@
 //                     (position, aim, hits, …) to everyone else, and relays WebRTC signalling for voice chat.
 //   Matchmaker (DO) — one per continent. Knows the public rooms there and how full they are, so quick play
 //                     can drop a player into an open match or start a new one.
+//   Census (DO)     — one for the whole game. Every room, public or private, reports its player count here, so the
+//                     first screen and the HUD can show how many people are online and where.
 //
 // API
 //   POST /api/quick              -> 200 { code }                 quick play: an open public room near you
@@ -11,6 +13,9 @@
 //   GET  /api/rooms/:code        -> 200 { exists, players, max } check before joining
 //   GET  /api/rooms/:code/ws     -> WebSocket upgrade            join (?peer=…&uid=…)
 //   GET  /api/ice?room=CODE      -> 200 { iceServers }           STUN/TURN for voice (TURN when a key is configured)
+//   GET  /api/online             -> 200 { online, dm:{players, matches}, rooms:{players, rooms} }
+//                                                                 players connected right now: in quick-play
+//                                                                 Deathmatch (public rooms) and in private rooms
 //
 // Wire protocol (JSON text frames; "ping" -> "pong" is answered without waking the object)
 //   server -> client  {t:'hello', you, code, max, now, peers:[{peer, by, p}]}
@@ -30,6 +35,8 @@ const EMPTY_TTL_MS = 30 * 60 * 1000; // an empty room is deleted after 30 minute
 const MAX_MSG_BYTES = 12288;
 const MAX_MSGS_PER_SEC = 60; // presence is ~15/s; voice setup sends a short burst of ICE candidates
 const STUN_ONLY = [{ urls: ["stun:stun.cloudflare.com:3478"] }];
+const CENSUS_AUDIT_MS = 60 * 1000; // how often the census re-checks rooms that have been quiet
+const CENSUS_STALE_MS = 2 * 60 * 1000; // a room quiet this long is asked for its real count
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -88,6 +95,10 @@ export default {
       return code ? json({ code, max: MAX_PLAYERS }, 201) : json({ error: "busy" }, 503);
     }
 
+    if (path === "/api/online") {
+      return json(await env.CENSUS.getByName("global").stats());
+    }
+
     if (path === "/api/ice") {
       // only for rooms that exist, so the endpoint can't be used as a free TURN credential mint
       const code = String(url.searchParams.get("room") || "").toUpperCase();
@@ -136,11 +147,13 @@ export class Room extends DurableObject {
     }
   }
 
-  // public rooms tell their matchmaker how full they are
+  // every room tells the census how many players it has; public rooms also tell their matchmaker
   async report(n) {
-    const mm = await this.ctx.storage.get("mm");
-    if (!mm) return;
     const code = await this.ctx.storage.get("code");
+    if (!code) return;
+    const mm = await this.ctx.storage.get("mm");
+    try { await this.env.CENSUS.getByName("global").report(code, n, !!mm); } catch { /* the census audits quiet rooms */ }
+    if (!mm) return;
     try { await this.env.MATCH.getByName(mm).report(code, n); } catch { /* next change reports again */ }
   }
 
@@ -292,5 +305,50 @@ export class Matchmaker extends DurableObject {
     if (n <= 0) delete rooms[code];
     else rooms[code] = { n, pending: Math.max(0, ((rooms[code] && rooms[code].pending) || 0) - 1), t: Date.now() };
     await this.save();
+  }
+}
+
+// Players online. Keeps {code: {n, t, pub}} for every room with players in it; pub marks quick-play Deathmatch rooms.
+// Rooms report on every join and leave. A room that went away without saying so (a crash, an eviction) would
+// leave a stale count, so rooms that have been quiet for a while are asked for their real count now and then.
+export class Census extends DurableObject {
+  async rooms() {
+    if (!this.map) this.map = (await this.ctx.storage.get("rooms")) || {};
+    return this.map;
+  }
+  async save() { await this.ctx.storage.put("rooms", this.map); }
+
+  async report(code, n, pub) {
+    const rooms = await this.rooms();
+    if (n > 0) rooms[code] = { n, t: Date.now(), pub: !!pub };
+    else if (rooms[code]) delete rooms[code];
+    else return;
+    await this.save();
+  }
+
+  async stats() {
+    const rooms = await this.rooms();
+    const now = Date.now();
+    if (now - (this.audited || 0) > CENSUS_AUDIT_MS) {
+      this.audited = now;
+      const quiet = Object.keys(rooms).filter((code) => now - rooms[code].t > CENSUS_STALE_MS);
+      if (quiet.length) {
+        await Promise.all(quiet.map(async (code) => {
+          try {
+            const { players } = await this.env.ROOMS.getByName(code).info();
+            if (players > 0) rooms[code] = { ...rooms[code], n: players, t: now };
+            else delete rooms[code];
+          } catch { /* leave it for the next audit */ }
+        }));
+        await this.save();
+      }
+    }
+    const dm = { players: 0, matches: 0 }, priv = { players: 0, rooms: 0 };
+    for (const r of Object.values(rooms)) {
+      const b = r.pub ? dm : priv;
+      b.players += r.n;
+      if (r.pub) dm.matches++; else priv.rooms++;
+    }
+    return { online: dm.players + priv.players, dm, rooms: priv };
   }
 }
