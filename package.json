@@ -1,0 +1,14 @@
+{
+  "name": "saltline",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "import": "node scripts/import.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node scripts/smoke.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.160.1"
+  }
+}

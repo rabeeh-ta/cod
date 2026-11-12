@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "saltline",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-01",
+  // the game lives at cod.rabeeta.xyz only (rabeeta.xyz is a zone on this Cloudflare account)
+  "routes": [{ "pattern": "cod.rabeeta.xyz", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./web",
+    "binding": "ASSETS",
+    // only the API runs code; the game files are served straight from Cloudflare's edge
+    "run_worker_first": ["/api/*"],
+    // /r/ABC123 invite links serve index.html; net.js reads the code from the path
+    "not_found_handling": "single-page-application"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOMS", "class_name": "Room" },
+      { "name": "MATCH", "class_name": "Matchmaker" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "Matchmaker"] }],
+  // optional, for voice behind strict NATs: Cloudflare Realtime TURN key
+  //   wrangler secret put TURN_KEY_ID   ·   wrangler secret put TURN_KEY_API_TOKEN
+  "observability": { "enabled": true }
+}

@@ -1,0 +1,7 @@
+node_modules/
+.wrangler/
+.dev.vars*
+.env*
+.DS_Store
+# raw export of the game from claude.ai; run `npm run import` to make the cleaned web/index.html
+COD.html
