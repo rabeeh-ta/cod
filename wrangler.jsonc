@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "saltline",
+  "name": "cod",
   "main": "src/worker.js",
   "compatibility_date": "2026-11-01",
   // the game lives at cod.rabeeta.xyz only (rabeeta.xyz is a zone on this Cloudflare account)

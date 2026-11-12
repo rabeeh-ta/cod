@@ -22,7 +22,7 @@ Front end is plain JS: the game is a single minified HTML file (three.js bundled
 ## Rules that are not obvious from the code
 
 - **`web/index.html` is generated.** `npm run import [path]` turns a raw claude.ai export (`COD.html`, gitignored) into it, removing the author's note, work references and a 1.9 MB legacy build. Change the game by re-exporting and re-importing. Each patch in `scripts/import.mjs` fails loudly when its anchor moves; fix the anchor, never loosen the check. The final check refuses any output that still names the original author or employer.
-- **The Worker name stays `saltline`.** Durable Object state, the custom domain and the Workers Builds connection are all keyed to that name. Renaming it makes a new, empty Worker.
+- **The Worker name stays `cod`.** It was renamed from `saltline` in the dashboard, which carried over the custom domain and Durable Objects (their namespaces are still called `saltline_Room` / `saltline_Matchmaker`). Changing `name` in `wrangler.jsonc` alone makes a new, empty Worker instead; rename in the dashboard first.
 - **Durable Object classes change only through a new migration tag** in `wrangler.jsonc` (`v1` today). Never edit or delete an existing tag.
 - **`master` is production.** Anything merged there goes live in about a minute. Run `npm test` against `npm run dev` before pushing. It is a protocol smoke test that needs a running server, so CI does not run it.
 - **The repo is public.** Secrets go in `wrangler secret put` (runtime) or `.dev.vars` (local, gitignored), never in `wrangler.jsonc`.
