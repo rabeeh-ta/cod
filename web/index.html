@@ -7864,12 +7864,13 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
         for (const k in mp.bank) totals[mp.bank[k][0]] += mp.bank[k][1];
         title = totals[0] === totals[1] ? (totals[0] ? 'Round drawn' : 'Round over') : TEAMS[totals[0] > totals[1] ? 0 : 1].name + ' wins the round';
       } else if (rows.length && rows[0].k > 0) title = rows.length > 1 && rows[1].k === rows[0].k ? 'Round drawn' : (rows[0].me ? 'You win' : rows[0].name + ' wins') + ' the round';
-      mp.final = { rows, totals, title, hint: 'Kills reset · new round is live', until: performance.now() + 8000 };
+      mp.final = { rows, totals, title, hint: 'New round · everyone starts fresh', until: performance.now() + 8000 };
       for (const m of ['dm', 'tdm']) { stats[m].kills = 0; stats[m].deaths = 0; }
       mp.bank = {}; mp.last = {}; mp.round = next;
       for (const R of remotes.values()) if (R.rd !== next) { R.k = 0; R.d = 0; }
       try { G.explosives.reset(); mp.lit.clear(); } catch { /* fine */ }
       refillFrags();
+      respawn(false); // a new round is a clean start for everyone: new spawn point, full health, full ammo, down or not
       try { hud.warn(title, 4); } catch { /* fine */ }
       try { G.audio.play('objective', { gain: .8 }); } catch { /* fine */ }
       mp.dirty = true; hudText(); lobbyPresence();
