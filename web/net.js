@@ -167,10 +167,43 @@
     const blocked = new Set(); // audio elements waiting for a user gesture before they may play
     const STUN = [{ urls: ['stun:stun.cloudflare.com:3478'] }];
     const offerer = peer => peerId < peer;
+    // Playback. An <audio> element cannot go above 100%, and voices came through much quieter than the gunfire, so every
+    // voice runs through Web Audio instead: peer gain (0 or 1, who you may hear) -> volume (0 to 400%, the Settings
+    // slider) -> limiter (so a boosted voice never clips) -> speakers. The <audio> element stays, muted: Chrome only
+    // feeds a remote stream into Web Audio while an element is also holding it.
+    const VOL_KEY = 'saltline.voiceVol', VOL_MAX = 4;
+    let vol = parseFloat(store.get(VOL_KEY)); if (!(vol >= 0 && vol <= VOL_MAX)) vol = 2;
+    let actx = null, master = null;
+    function out() {
+      if (actx) return actx;
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AC(), lim = ctx.createDynamicsCompressor();
+        lim.threshold.value = -10; lim.knee.value = 8; lim.ratio.value = 12; lim.attack.value = .003; lim.release.value = .2;
+        master = ctx.createGain(); master.gain.value = vol;
+        master.connect(lim); lim.connect(ctx.destination);
+        actx = ctx;
+      } catch { actx = null; }
+      return actx;
+    }
+    function unwire(c) {
+      for (const n of [c.src, c.gain]) if (n) try { n.disconnect(); } catch { /* fine */ }
+      c.src = c.gain = null;
+    }
+    function wire(c, stream) {
+      unwire(c);
+      if (!out()) { c.audio.volume = Math.min(1, vol); return; } // no Web Audio: plain element, 100% at most
+      try {
+        c.src = actx.createMediaStreamSource(stream);
+        c.gain = actx.createGain(); c.gain.gain.value = 0; // the next tick opens it if you may hear this player
+        c.src.connect(c.gain); c.gain.connect(master);
+        c.audio.muted = true;
+      } catch { unwire(c); c.audio.muted = false; c.audio.volume = Math.min(1, vol); }
+    }
     const supported = typeof RTCPeerConnection === 'function' && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
     function play(a) { const p = a.play(); if (p && p.catch) p.catch(() => blocked.add(a)); }
-    const unblock = () => { for (const a of blocked) { blocked.delete(a); play(a); } };
+    const unblock = () => { for (const a of blocked) { blocked.delete(a); play(a); } if (actx && actx.state === 'suspended') actx.resume().catch(() => {}); };
     addEventListener('pointerdown', unblock, true); addEventListener('keydown', unblock, true);
 
     async function iceServers() {
@@ -187,6 +220,7 @@
       const c = conns.get(peer); if (!c) return;
       conns.delete(peer);
       try { c.pc.close(); } catch { /* fine */ }
+      unwire(c);
       c.audio.srcObject = null; c.audio.remove(); blocked.delete(c.audio);
     }
     function make(peer, servers) {
@@ -195,9 +229,9 @@
       const audio = document.createElement('audio');
       audio.autoplay = true; audio.setAttribute('playsinline', ''); audio.hidden = true;
       document.body.appendChild(audio);
-      const c = { pc, sender: null, audio, cands: [] };
+      const c = { pc, sender: null, audio, cands: [], src: null, gain: null };
       pc.onicecandidate = e => { if (e.candidate && conns.get(peer) === c) room.sig(peer, { k: 'cand', c: e.candidate.toJSON() }); };
-      pc.ontrack = e => { audio.srcObject = (e.streams && e.streams[0]) || new MediaStream([e.track]); play(audio); };
+      pc.ontrack = e => { const s = (e.streams && e.streams[0]) || new MediaStream([e.track]); audio.srcObject = s; wire(c, s); play(audio); };
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'failed' && conns.get(peer) === c && offerer(peer)) {
           setTimeout(() => { if (conns.get(peer) === c && room.get(peer)) call(peer); }, 1500 + Math.random() * 1500);
@@ -277,14 +311,24 @@
         for (const c of conns.values()) attach(c);
         if (mic) { mic.getTracks().forEach(t => t.stop()); mic = null; } // releases the mic, so the browser's mic light goes off
       },
-      debug: () => ({ mic: micOn, peers: [...conns].map(([peer, c]) => ({ peer, state: c.pc.connectionState, muted: c.audio.muted, hearing: !!c.audio.srcObject })) }),
+      // how loud other players' voices are: 0 to 4 (400%), kept for the next visit
+      get volume() { return vol; },
+      maxVolume: VOL_MAX,
+      setVolume(v) {
+        vol = Math.max(0, Math.min(VOL_MAX, +v || 0));
+        store.set(VOL_KEY, String(vol));
+        if (master) master.gain.value = vol;
+        for (const c of conns.values()) if (!c.gain) c.audio.volume = Math.min(1, vol);
+      },
+      debug: () => ({ mic: micOn, volume: vol, boosted: !!actx, peers: [...conns].map(([peer, c]) => ({ peer, state: c.pc.connectionState, muted: c.gain ? c.gain.gain.value === 0 : c.audio.muted, hearing: !!c.audio.srcObject })) }),
       // runs a few times a second: mute who you shouldn't hear, report who is talking
       tick() {
         const talking = [];
         if (!room) return talking;
         for (const [peer, c] of conns) {
           const on = audible(peer);
-          if (c.audio.muted === on) c.audio.muted = !on;
+          if (c.gain) { const g = on ? 1 : 0; if (c.gain.gain.value !== g) c.gain.gain.value = g; }
+          else if (c.audio.muted === on) c.audio.muted = !on;
           if (!on) continue;
           try {
             const r = c.pc.getReceivers()[0], s = r && r.getSynchronizationSources && r.getSynchronizationSources()[0];
@@ -705,7 +749,21 @@
 
     // a few times a second: which overlay belongs on screen, and who is talking
     let talkSig = '';
+    // Settings: a "Voice chat volume" slider under the game's Master volume, built from the game's own row and slider
+    function voiceRow() {
+      if (!voice.supported || document.getElementById('s-voice')) return;
+      const after = document.getElementById('s-vol'), row = after && after.closest('.row');
+      if (!row) return;
+      const r = document.createElement('div'); r.className = 'row';
+      r.innerHTML = '<label for="s-voice">Voice chat volume</label><div class="slider"><input id="s-voice" type="range" min="0" max="' + voice.maxVolume * 100 + '" step="5"><output></output></div>';
+      const input = r.querySelector('input'), o = r.querySelector('output');
+      const show = () => { o.textContent = Math.round(voice.volume * 100) + '%'; };
+      input.value = String(Math.round(voice.volume * 100)); show();
+      input.addEventListener('input', () => { voice.setVolume(+input.value / 100); show(); });
+      row.after(r);
+    }
     setInterval(() => {
+      voiceRow();
       const st = gameState(), onTitle = st === 'title';
       // after a quick-play match the game drops back to its title: this screen is home
       if (session.kind === 'public' && onTitle && !joiningDm) showGate();

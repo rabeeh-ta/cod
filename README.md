@@ -8,7 +8,7 @@ The first screen has three ways to play:
 - **Room**: private. Create a room to get a 6-character code and invite link (`/r/ABC123`), or join one with a code. Inside the room you pick Deathmatch or Team play (Gate vs Quay). Up to 10 players.
 - **Solo**: the single-player mission.
 
-Voice chat works in every online match. Press **V** (or the MIC button on touch) to talk. You hear the players in your match, and in Team play only your own team.
+Voice chat works in every online match. Press **V** (or the MIC button on touch) to talk. You hear the players in your match, and in Team play only your own team. **Settings → Voice chat volume** sets how loud other players are, from 0 to 400% (200% to start).
 
 ## Run it
 

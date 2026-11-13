@@ -7560,7 +7560,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       } catch { /* fine */ }
       mp.replayPeer = '';
     }
-    const STEP = { run: 26, walk: 18, crouch: 6, gRun: 2.5, gWalk: 2, gCrouch: .8 }; // metres you can hear a footstep from, and how loud it is point blank
+    const STEP = { run: 26, walk: 18, crouch: 6, gRun: 4.5, gWalk: 3.6, gCrouch: 1.3 }; // metres you can hear a footstep from, and how loud it is point blank
     const CAUSES = { rifle: 1, knife: 1, frag: 1, barrel: 1, down: 1 };
     function remoteDown(R, killer, cause, hs) {
       const c = CAUSES[cause] ? cause : killer ? 'rifle' : 'down', mine = !!killer && killer === net.myPeer;
@@ -7750,7 +7750,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
             const run = R.speed > 4.6, range = R.crouch ? STEP.crouch : run ? STEP.run : STEP.walk, dist = Math.sqrt(P.pos.distanceToSquared(R.pos));
             if (!R.air && dist < range) {
               const near = 1 - dist / range, mate = mp.mode === 'tdm' && R.tm === mp.team;
-              const gain = (R.crouch ? STEP.gCrouch : run ? STEP.gRun : STEP.gWalk) * Math.pow(near, 1.5) * (mate ? .4 : 1);
+              const gain = (R.crouch ? STEP.gCrouch : run ? STEP.gRun : STEP.gWalk) * Math.pow(near, 1.1) * (mate ? .25 : 1);
               if (gain > .02) try { G.audio.play('step_concrete', { pos: { x: R.pos.x, y: R.pos.y + .1, z: R.pos.z }, world: true, ref: 1, roll: 0, gain, pitch: run ? 1.04 : .96, jitter: .07 }); } catch { /* fine */ }
             }
           }

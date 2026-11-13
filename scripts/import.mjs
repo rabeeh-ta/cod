@@ -6,6 +6,7 @@
 //   2. empty the author's note (the menu code needs the element; with no v8 build the game keeps it hidden)
 //   3. swap the lobby's team-server label for the room, and reword the offline note (it pointed at claude.ai)
 //   4. load /net.js (the Cloudflare adapter) right before the multiplayer layer
+//   5. louder enemy footsteps: more gain point blank, a gentler fade with distance (hearing ranges unchanged), quieter teammates
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,6 +30,9 @@ once(/\/\* Felix's note[^*]*\*\//, "/* author's note (kept empty): floats top ri
 once(/<span>[^<]*team server<\/span>/, '<span data-net-room>Online room</span>', 'the lobby eyebrow');
 once(/nohost: '[^']*'/, "nohost: 'You are not in a room. Pick Multiplayer to join a match or a room. Solo works either way.'", 'the offline note');
 once('<script>\n/* Saltline multiplayer layer.', '<script src="/net.js"></script>\n<script>\n/* Saltline multiplayer layer.', 'the multiplayer layer');
+
+once("const STEP = { run: 26, walk: 18, crouch: 6, gRun: 2.5, gWalk: 2, gCrouch: .8 };", "const STEP = { run: 26, walk: 18, crouch: 6, gRun: 4.5, gWalk: 3.6, gCrouch: 1.3 };", 'the footstep levels');
+once("* Math.pow(near, 1.5) * (mate ? .4 : 1);", "* Math.pow(near, 1.1) * (mate ? .25 : 1);", 'the footstep distance fade');
 
 const leftover = html.match(/blend-ed|felix|claude\.ai\/artifact/gi);
 if (leftover) throw new Error(`import: personal references left in the game: ${[...new Set(leftover)].join(', ')}`);
