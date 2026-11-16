@@ -1,0 +1,226 @@
+{
+ "id": "sniper",
+ "source": {
+  "author": "xlisov (https://sketchfab.com/xlisov74)",
+  "license": "CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)",
+  "source": "https://sketchfab.com/3d-models/sv-98-contract-wars-130bd9dd144a4da2971d148dd0098492",
+  "title": "SV-98 | Contract Wars"
+ },
+ "bin": "sniper.bin",
+ "size": [
+  0.0865,
+  0.2524,
+  1.278
+ ],
+ "min": [
+  -0.0358,
+  -0.0852,
+  -0.9112
+ ],
+ "max": [
+  0.0507,
+  0.1672,
+  0.3669
+ ],
+ "triangles": 13920,
+ "points": {
+  "muzzle": [
+   0,
+   0.083,
+   -0.913
+  ],
+  "sight": [
+   0,
+   0.1315,
+   0.06
+  ],
+  "eject": [
+   0.02,
+   0.09,
+   -0.08
+  ],
+  "port": [
+   0,
+   -0.025,
+   -0.11
+  ],
+  "support": [
+   0,
+   0.03,
+   -0.33
+  ],
+  "grip": [
+   0,
+   -0.035,
+   0.06
+  ],
+  "butt": [
+   0,
+   -0.005,
+   0.367
+  ],
+  "boltAxis": [
+   0,
+   0.0835,
+   -0.03
+  ]
+ },
+ "materials": [
+  {
+   "name": "AWM_optic",
+   "glass": false,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metalness": 0,
+   "map": "sniper-0-color.jpg",
+   "orm": "sniper-0-orm.jpg",
+   "normal": null,
+   "ao": false
+  },
+  {
+   "name": "OpticSight_m40_glass",
+   "glass": true,
+   "color": [
+    0.05,
+    0.05,
+    0.05
+   ],
+   "roughness": 0.15000000000000002,
+   "metalness": 0,
+   "map": null,
+   "orm": null,
+   "normal": null,
+   "ao": false
+  },
+  {
+   "name": "aek_muzzle",
+   "glass": false,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metalness": 0,
+   "map": "sniper-3-color.jpg",
+   "orm": "sniper-3-orm.jpg",
+   "normal": null,
+   "ao": false
+  },
+  {
+   "name": "optic_glass_round_optic",
+   "glass": true,
+   "color": [
+    0.05,
+    0.05,
+    0.05
+   ],
+   "roughness": 0.15000000000000002,
+   "metalness": 0,
+   "map": null,
+   "orm": null,
+   "normal": null,
+   "ao": false
+  },
+  {
+   "name": "sv98_cs_weapons-Material__34",
+   "glass": false,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metalness": 0,
+   "map": "sniper-6-color.jpg",
+   "orm": "sniper-6-orm.jpg",
+   "normal": "sniper-6-normal.jpg",
+   "ao": false
+  },
+  {
+   "name": "sv98_cs_weapons-Material__35",
+   "glass": false,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metalness": 0,
+   "map": "sniper-7-color.jpg",
+   "orm": "sniper-7-orm.jpg",
+   "normal": null,
+   "ao": false
+  }
+ ],
+ "parts": [
+  {
+   "name": "body",
+   "material": 0,
+   "vertices": 3667,
+   "indices": 13662,
+   "wide": false,
+   "at": 0
+  },
+  {
+   "name": "body",
+   "material": 1,
+   "vertices": 65,
+   "indices": 288,
+   "wide": false,
+   "at": 111668
+  },
+  {
+   "name": "body",
+   "material": 2,
+   "vertices": 997,
+   "indices": 2880,
+   "wide": false,
+   "at": 113740
+  },
+  {
+   "name": "body",
+   "material": 3,
+   "vertices": 97,
+   "indices": 480,
+   "wide": false,
+   "at": 142432
+  },
+  {
+   "name": "body",
+   "material": 4,
+   "vertices": 5996,
+   "indices": 18432,
+   "wide": false,
+   "at": 145624
+  },
+  {
+   "name": "body",
+   "material": 5,
+   "vertices": 638,
+   "indices": 1626,
+   "wide": false,
+   "at": 320396
+  },
+  {
+   "name": "bolt",
+   "material": 4,
+   "vertices": 190,
+   "indices": 780,
+   "wide": false,
+   "at": 338324
+  },
+  {
+   "name": "mag",
+   "material": 4,
+   "vertices": 1405,
+   "indices": 3612,
+   "wide": false,
+   "at": 344256
+  }
+ ]
+}

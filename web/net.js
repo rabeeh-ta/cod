@@ -522,6 +522,10 @@
       .net-mode em:empty { display: none; }
       /* map: the game's own segmented control, as on its settings panel */
       .net-map { display: grid; gap: 8px; margin-top: 16px; }
+      /* the guns: beside the menu where there is room, under it where there is not */
+      .net-guns { display: grid; gap: 12px; width: min(980px, 54vw); margin-left: auto; padding-left: 28px; margin-right: max(0px, 2vw); }
+      .net-guns[hidden] { display: none; }
+      @media (max-width: 1100px) { .net-gate { flex-wrap: wrap; align-content: center; gap: 22px; } .net-guns { width: 100%; max-width: 460px; margin: 0; } }
       .net-map[hidden] { display: none; }
       .net-map .seg button { min-height: 36px; font-size: 12px; background: rgba(11, 13, 15, .45); }
       .net-map .seg button[aria-pressed="true"] { background: var(--bone, #e8e4da); }
@@ -570,12 +574,13 @@
           <button type="button" class="net-mode" data-net="solo"><b>Solo</b><span>The mission. Cut the relays and hold the berth.</span><i>&rarr;</i></button>
         </div>
         <p class="net-status" role="status"></p>
-      </div>`;
+      </div>
+      <div class="net-guns" hidden><span class="net-k">Gun</span><div data-net="guns"></div></div>`;
     const $ = s => gate.querySelector(s);
     const nameIn = $('[data-net="name"]'), codeIn = $('[data-net="code"]'), roomForm = $('.net-room'), roomBtn = $('[data-net="room"]'), statusEl = $('.net-status');
     const allBtns = () => [...gate.querySelectorAll('button')];
 
-    new MutationObserver(() => document.documentElement.classList.toggle('net-gate-open', !gate.hidden)).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
+    new MutationObserver(() => { document.documentElement.classList.toggle('net-gate-open', !gate.hidden); showGuns(); }).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
     // the loading line: a copy of the game's own, shown until the scene is up (see .net-load above)
     const load = document.createElement('div'); load.className = 'net-load'; load.setAttribute('aria-hidden', 'true');
     load.innerHTML = '<div class="boot-sub"></div><div class="boot-bar"><i></i></div>';
@@ -586,6 +591,45 @@
       if (fill) load.lastChild.firstChild.style.width = fill.style.width;
       if (window.__ready || window.__fatal) { clearInterval(sceneUp); document.documentElement.classList.add('net-scene'); }
     }, 80);
+    /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
+       whoever goes looking. Add a new entry at the top with each release. */
+    const UPDATES = [
+      ['16 Nov 2026', ['Two new guns: the PAC-12 Breakwater shotgun and the PAC-98 Lookout sniper rifle, with a scope', 'Choose your gun on the first screen and each time you go down; B picks the gun for your next life', 'Ammo sets at two places on every map: hold the reload key beside one to restock. A new set arrives 90 seconds later', 'Back in the fight 2 seconds after going down, then protected for 5 seconds (it ends when you fire)', 'The card shown when you go down says what hit you, from how far, and whether it was a headshot', 'Every gun reloads by itself after its last round', 'Statues, doorways and scaffolds in the Colosseum stands']],
+      ['16 Nov 2026', ['A second map: the Colosseum, with a map choice on the first screen', 'The minimap and grenade markers draw again', 'The first screen stays dark with a loading line until the map is ready']],
+      ['13 Nov 2026', ['A new round restarts every player: position, health and ammo', 'Louder voice chat with its own volume setting, and louder enemy footsteps']],
+    ];
+    const CREDITS = 'Shotgun: "Simple old shotgun" by SuperMopsek (CC BY 4.0). Sniper rifle: "SV-98 | Contract Wars" by xlisov (CC BY-NC 4.0). Ammunition: "Ammo Set" by Guy in a Poncho (CC BY 4.0). All from sketchfab.com.';
+    const logCss = document.createElement('style');
+    logCss.textContent = `.net-log { margin-top: 26px; border-top: 1px solid var(--line, rgba(232,228,218,.2)); padding-top: 12px; }
+      .net-log summary { cursor: pointer; font: 500 11px/1 var(--f-mono, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--bone-faint, rgba(232,228,218,.4)); list-style: none; }
+      .net-log summary::-webkit-details-marker { display: none; }
+      .net-log summary:hover, .net-log summary:focus-visible, .net-log[open] summary { color: var(--bone-dim, rgba(232,228,218,.64)); outline: none; }
+      .net-log h4 { margin: 16px 0 6px; font: 500 11px/1 var(--f-mono, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--signal, #ffb347); }
+      .net-log ul { margin: 0; padding-left: 18px; } .net-log li { margin: 4px 0; font-size: 15px; line-height: 1.35; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .net-perf { position: fixed; left: 12px; bottom: 12px; z-index: 1200; padding: 8px 10px; background: rgba(11,13,15,.82); border: 1px solid var(--line, rgba(232,228,218,.2)); color: #e8e4da; font: 500 11px/1.5 var(--f-mono, monospace); letter-spacing: .04em; white-space: pre; pointer-events: none; }`;
+    document.head.appendChild(logCss);
+    const logWait = setInterval(() => {
+      const pane = document.querySelector('[data-pane="settings"]'); if (!pane) return; clearInterval(logWait);
+      const d = document.createElement('details'); d.className = 'net-log';
+      d.innerHTML = '<summary>Update log</summary>' + UPDATES.map(([when, items]) => `<h4>${when}</h4><ul>${items.map(t => `<li>${t}</li>`).join('')}</ul>`).join('') + '<h4>Press F3 in a match</h4><ul><li>Shows frames per second and what the game is drawing, for reporting slow machines</li></ul>';
+      pane.appendChild(d);
+      const keys = document.querySelector('[data-pane="controls"]'); if (keys) { const c = document.createElement('p'); c.className = 'panel-note'; c.textContent = CREDITS; keys.appendChild(c); }
+    }, 500);
+    /* F3: a small readout of how the game is running on this machine (for players to send when it is slow) */
+    let perfEl = null, perfT = [];
+    window.addEventListener('keydown', e => {
+      if (e.code !== 'F3') return; e.preventDefault();
+      if (perfEl) { perfEl.remove(); perfEl = null; return; }
+      perfEl = document.createElement('div'); perfEl.className = 'net-perf'; document.body.appendChild(perfEl); perfT = []; let last = performance.now(), shown = 0;
+      const gpu = (() => { try { const g = window.__G.renderer.getContext(), x = g.getExtension('WEBGL_debug_renderer_info'); return x ? g.getParameter(x.UNMASKED_RENDERER_WEBGL) : 'unknown'; } catch { return 'unknown'; } })();
+      const tick = now => {
+        if (!perfEl) return; perfT.push(now - last); last = now; if (perfT.length > 300) perfT.shift();
+        if (now - shown > 500) { shown = now; const t = perfT.slice().sort((a, b) => a - b), avg = t.reduce((a, b) => a + b, 0) / t.length, st = window.__stats ? window.__stats() : {}, q = window.__G && window.__G.quality;
+          perfEl.textContent = `${(1000 / avg).toFixed(0)} fps   slowest 1%: ${(1000 / t[Math.floor(t.length * 0.99)]).toFixed(0)} fps\nquality ${q ? q.name : '?'}   ${st.res ? st.res.join(' x ') : '?'}   scale ${st.scale ?? '?'}\n${st.calls ?? '?'} draws   ${st.tris ? (st.tris / 1e6).toFixed(2) + ' M' : '?'} triangles\n${gpu.slice(0, 70)}`; }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
     const badge = document.createElement('div'); badge.className = 'net-badge'; badge.hidden = true;
     const talk = document.createElement('div'); talk.className = 'net-talk';
 
@@ -597,6 +641,10 @@
     const post = path => fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ map: mapId() }) });
     // reload into a map (and a path) without changing the one the player has chosen as theirs
     const visit = (id, path) => maps.choose(id, path, false) || (location.assign(path), true);
+    /* The gun to go in with: three cards beside the menu (web/guns.js draws them and keeps the choice). The same cards
+       are shown again each time the player goes down. They are one set, so they are put back here whenever this screen returns. */
+    const guns = window.__SALTLINE_GUNS, gunBox = $('.net-guns'), gunHost = $('[data-net="guns"]');
+    const showGuns = () => { if (guns && guns.mount && !gate.hidden) { gunBox.hidden = false; guns.mount(gunHost, 'big'); } };
     const mapBox = $('.net-map'), mapSeg = mapBox.querySelector('.seg');
     if (maps.list.length > 1) {
       mapBox.hidden = false;

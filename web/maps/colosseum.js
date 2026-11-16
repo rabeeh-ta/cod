@@ -921,35 +921,72 @@ void main(){
     const kuAt = d => Math.round(perim(d) / 4.8) * 4.8 / L;                 // blocks meet themselves after one lap
     const SEG = HB;                                                         // a seat row is cut at every bay line
     const gateBay = k => plan.crown[((k % NB) + NB) % NB] === 'gate';
-    function band(b, rows, stairs, stairHalf, tag, skip = null) {
+    /* vom: doorways out of the stands (vomitoria). At every `every`-th stair (counting from `at`) the rows r0 .. r0 + n - 1
+       are cut wider and open onto a dark passage, with a low wall up each side and across the stair above it.
+       lost(bay, row): where the stone seat is gone and the step of brick-faced concrete under it shows. */
+    function band(b, rows, stairs, stairHalf, tag, skip = null, vom = null, lost = null) {
+      const isVom = c => !!vom && c % vom.every === vom.at;
       for (let r = 0; r < rows; r++) {
         const d0 = b.d + r * b.tread, d1 = d0 + b.tread, y0 = b.y + r * b.rise, y1 = y0 + b.rise, ku = kuAt(d0), course = (r % 4) * 0.6;
         const tone = 0.86 + 0.2 * hash(r, 31, tag);
         // the stairs cut this row into stretches
-        const cuts = stairs.map(sc => { const h = metres(sc, d0 + b.tread / 2, stairHalf); return [sc - h, sc + h]; }).sort((p, q) => p[0] - q[0]);
+        const cuts = stairs.map((sc, c) => { const open = isVom(c) && r >= vom.r0 && r < vom.r0 + vom.n, h = metres(sc, d0 + b.tread / 2, open ? vom.half : stairHalf); return [sc - h, sc + h, open]; }).sort((p, q) => p[0] - q[0]);
         for (let c = 0; c < cuts.length; c++) {
           const from = cuts[c][1], to = c + 1 < cuts.length ? cuts[c + 1][0] : cuts[0][0] + L;
           // seats between two stairs, cut at the bay lines
           let a = from;
           while (a < to - 1e-6) {
-            const next = Math.min(to, (Math.floor(a / SEG + 1e-6) + 1) * SEG), k = Math.round(a / SEG);
-            if (skip && skip(Math.floor((a + next) / 2 / SEG))) { a = next; continue; }
-            const stain = 0.72 + 0.4 * fbm2(k * 0.23 + tag * 7, r * 0.31 + tag * 3), t = tone * stain * (0.92 + 0.16 * hash(k, r, tag));
+            const next = Math.min(to, (Math.floor(a / SEG + 1e-6) + 1) * SEG), k = Math.round(a / SEG), kb = Math.floor((a + next) / 2 / SEG);
+            if (skip && skip(kb)) { a = next; continue; }
+            const stain = 0.72 + 0.4 * fbm2(k * 0.23 + tag * 7, r * 0.31 + tag * 3);
+            if (lost && lost(kb, r)) {
+              // the stone seat is gone: the step of brick-faced concrete it was bedded on, rougher and redder, with now and then a block that slid and stayed
+              const bt = 0.8 + 0.34 * hash(kb, r, tag + 20) * stain;
+              const red = v => [bt * v * 1.16, bt * v * 0.8, bt * v * 0.66];                    // fired clay against pale stone: it has to read from the sand
+              strip('brick', a, next, d0, y0, d0, y1, { ku: 1, vA: r * 0.31, vB: r * 0.31 + b.rise, cA: red(0.68), cB: red(1.05) });
+              strip('brick', a, next, d0, y1, d1, y1, { ku: 1, vA: r * 0.31 + 1, vB: r * 0.31 + 1 + b.tread, cA: red(1.0), cB: red(0.6) });
+              if (hash(kb, r, tag + 40) < 0.17) {
+                const sa = a + (next - a) * (0.12 + 0.5 * hash(kb, r, 41)), sb = Math.min(next, sa + metres(sa, d0, 0.5 + 0.5 * hash(kb, r, 42))), rt = 0.8 + 0.25 * hash(kb, r, 43);
+                box('trav', sa, sb, d0 + 0.1, d0 + 0.5, y1, y1 + 0.33, { faces: 'ftlr', col: rt, side: rt * 0.72, top: rt * 1.06, u0: kb * 1.7 });
+              }
+              a = next; continue;
+            }
+            const t = tone * stain * (0.92 + 0.16 * hash(k, r, tag));
             strip('ashlar', a, next, d0, y0, d0, y1, { ku, vA: course, vB: course + 0.6, cA: t * 0.52, cB: t * 1.0 });
             strip('ashlar', a, next, d0, y1, d1, y1, { ku, vA: course + 1.2, vB: course + 1.8, cA: t * 0.9, cB: t * 0.5 });
             a = next;
           }
           // the stair after this stretch: two steps to a row
-          const [q0, q1] = c + 1 < cuts.length ? cuts[c + 1] : [cuts[0][0] + L, cuts[0][1] + L];
+          const [q0, q1, open] = c + 1 < cuts.length ? cuts[c + 1] : [cuts[0][0] + L, cuts[0][1] + L, cuts[0][2]];
           if (skip && (skip(Math.floor(q0 / SEG)) || skip(Math.floor(q1 / SEG)))) continue;
+          if (open) {                       // a row of a doorway: its two side walls down to the passage floor, and the low wall on the seats either side
+            const g0 = (r - vom.r0) / vom.n, g1 = (r - vom.r0 + 1) / vom.n, yF = b.y + vom.r0 * b.rise, c0 = tone * 0.72 * (1 - 0.8 * g0), c1 = tone * 0.72 * (1 - 0.8 * g1), pw = metres(q0, d0, 0.17), pt = tone * 0.98, yP = y1 + b.rise + 0.36;
+            cheek('trav', q0, [[d0, yF], [d1, yF], [d1, y1], [d0, y1]], 1, { col: PV(c0 * 0.6, c1 * 0.6, c1, c0) });
+            cheek('trav', q1, [[d0, yF], [d1, yF], [d1, y1], [d0, y1]], -1, { col: PV(c0 * 0.6, c1 * 0.6, c1, c0) });
+            box('trav', q0 - pw, q0, d0, d1, y1, yP, { faces: 'ftlr', col: pt, side: pt * 0.78, top: pt * 1.06, ku });
+            box('trav', q1, q1 + pw, d0, d1, y1, yP, { faces: 'ftlr', col: pt, side: pt * 0.78, top: pt * 1.06, ku });
+            continue;
+          }
           const ym = y0 + b.rise / 2, dm = d0 + b.tread / 2, st = tone * 0.84;
           strip('trav', q0, q1, d0, y0, d0, ym, { ku, cA: st * 0.7, cB: st * 0.95 }); strip('trav', q0, q1, d0, ym, dm, ym, { ku, vA: 0, vB: b.tread / 2, cA: st, cB: st * 0.75 });
           strip('trav', q0, q1, dm, ym, dm, y1, { ku, cA: st * 0.7, cB: st * 0.95 }); strip('trav', q0, q1, dm, y1, d1, y1, { ku, vA: 0, vB: b.tread / 2, cA: st, cB: st * 0.75 });
           // the ends of the seat rows that stand above the first step
-          cheek('trav', q0, [[d0, ym], [dm, ym], [dm, y1], [d0, y1]], 1, { col: tone * 0.7 });
-          cheek('trav', q1, [[d0, ym], [dm, ym], [dm, y1], [d0, y1]], -1, { col: tone * 0.7 });
+          // (brick where the seat beside the stair is gone)
+          for (const [q, dir] of [[q0, 1], [q1, -1]]) cheek(lost && lost(Math.floor((q - dir * 0.01) / SEG), r) ? 'brick' : 'trav', q, [[d0, ym], [dm, ym], [dm, y1], [d0, y1]], dir, { col: tone * 0.7 });
         }
       }
+      if (vom) stairs.forEach((sc, c) => {            // what closes each doorway: the passage floor going into the dark, the frame and lintel at its back, the wall across the stair above
+        if (!isVom(c)) return;
+        const dA = b.d + vom.r0 * b.tread, dB = b.d + (vom.r0 + vom.n) * b.tread, yF = b.y + vom.r0 * b.rise, yT = b.y + (vom.r0 + vom.n) * b.rise, hA = metres(sc, dA, vom.half), hB = metres(sc, dB, vom.half);
+        const t = 0.9 + 0.16 * hash(c, 33, tag), jw = hB * 0.17, hs = metres(sc, dB, stairHalf), ku = kuAt(dB);
+        bld.add('trav', [[sc - hA, dA, yF], [sc + hA, dA, yF], [sc + hB, dB, yF], [sc - hB, dB, yF]], [0, 0, 1], [[0, 0], [2 * vom.half, 0], [2 * vom.half, dB - dA], [0, dB - dA]], PV(t * 0.62, t * 0.62, 0.07, 0.07), 'r');
+        bld.add('dark', [[sc - hB, dB - 0.02, yF], [sc + hB, dB - 0.02, yF], [sc + hB, dB - 0.02, yT - 0.3], [sc - hB, dB - 0.02, yT - 0.3]], [0, -1, 0], [[0, 0], [1, 0], [1, 1], [0, 1]], 1, '');
+        box('trav', sc - hB, sc + hB, dB - 0.12, dB, yT - 0.3, yT, { faces: 'fb', col: t, ku, u0: c });
+        box('trav', sc - hB, sc - hB + jw, dB - 0.1, dB, yF, yT - 0.3, { faces: 'fr', col: t * 0.9, side: t * 0.55 });
+        box('trav', sc + hB - jw, sc + hB, dB - 0.1, dB, yF, yT - 0.3, { faces: 'fl', col: t * 0.9, side: t * 0.55 });
+        box('trav', sc - hs * 1.25, sc + hs * 1.25, dB - 0.02, dB + 0.17, yT, yT + 0.52, { faces: 'ftlr', col: t, top: t * 1.05, side: t * 0.8, ku, u0: c + 2 });
+        bld.count('vomitoria');
+      });
       bld.count('rows', rows); bld.count('stairs', stairs.length);
     }
     const even = [], odd = [];
@@ -958,9 +995,11 @@ void main(){
     const tr = SEC.terrace;
     for (let i = 0; i < NB; i++) if (!gateBay(i)) strip('ashlar', i * HB, (i + 1) * HB, 0.34, tr.y, tr.d1, tr.y, { ku: kuAt(1), vA: 0, vB: 1.8, col: 0.9 * (0.92 + 0.16 * hash(i, 40)) });
     band({ d: tr.d1, y: tr.y, tread: tr.tread, rise: tr.rise }, tr.rows, even, 0.55, 0, gateBay);       // the gate passages run under here
-    band(SEC.band1, SEC.band1.rows, even, 0.5, 1);
-    band(SEC.band2, SEC.band2.rows, odd, 0.5, 2);
-    band(SEC.band3, SEC.band3.rows, even, 0.45, 3);
+    // where the seats are lost: ragged patches high in the bowl, the largest under the scaffolds (buildRepairs)
+    const gone = patches => (k, r) => patches.some(([pk, pr, rk, rr]) => { const dk = ((((k - pk) % NB) + NB * 1.5) % NB) - NB / 2, e = (dk / rk) * (dk / rk) + ((r - pr) / rr) * ((r - pr) / rr); return e + (hash(k, r, pk) - 0.5) * 0.8 + (fbm2(k * 0.83 + pk, r * 0.47) - 0.5) * 1.1 < 1; });
+    band(SEC.band1, SEC.band1.rows, even, 0.5, 1, null, { every: 5, at: 2, r0: 5, n: 5, half: 0.85 });
+    band(SEC.band2, SEC.band2.rows, odd, 0.5, 2, null, { every: 5, at: 0, r0: 6, n: 5, half: 0.9 }, (k, r) => r >= 12 && gone([[24, 17, 3, 4.5], [63, 16.5, 3.6, 5], [4, 18, 2.2, 3.4]])(k, r));      // above the doorways only
+    band(SEC.band3, SEC.band3.rows, even, 0.45, 3, null, null, gone([[11.5, 8, 3.2, 4.4], [33, 9, 2.4, 3.6], [51.5, 8, 3.0, 4.4], [71, 7.5, 2.2, 4.6]]));                // the rows that show over the high wall from the sand
 
     /* The walls between the bands, with their doorways: dark openings in a stone frame, as in the picture. */
     function wall(w, doors, doorW, doorH, tag, extra) {
@@ -1023,6 +1062,186 @@ void main(){
         bld.count('banners');
       }
     });
+  }
+
+  /* ------------------------------------------------------------------ statues
+     What the bowl lacked above the sand: marble figures. One stands on a pedestal on the first wall between each pair
+     of its doorways, one in a round-headed niche in each of the two higher walls, and one between every pair of columns
+     of the colonnade at the top. Four figures (a man in a toga, an athlete with a discus, Minerva with spear and
+     shield, a general with his arm raised), never the same one twice running, turned either way, each of its own
+     marble. This is a ruin under repair, so some have lost a head or an arm, and some plinths stand empty.
+     A figure is made of tubes: a path of points, each with a half width and a half depth, skinned round.        */
+  const STATUES = [];                // where each one stands, so that a shot from the sand marks the statue and not the seats behind it (installPhysics)
+  function buildStatues(bld, sh) {
+    const KINDS = 4;
+    // s, d, y0: where it stands. k: scale (1 is a man of 1.8 m). m: +1 or -1, which way round. dmg: 0 whole, 1 no head, 2 no right arm, 3 only the feet are left
+    // lod: 2 for the ones nearest the sand, 1, or 0 for those seen from fifty metres
+    function figure(s, d, y0, k, kind, m, tone, dmg, lod) {
+      const f = frame(s), [ox, oz] = ringAt(s, d), R = [f.tx * m, f.tz * m], Fw = [-f.nx, -f.nz], sector = bld.sectorOf(s), seed = hash(Math.round(s * 10), kind, 7) * 40;
+      const W = p => [ox + (R[0] * p[0] + Fw[0] * p[2]) * k, y0 + p[1] * k, oz + (R[1] * p[0] + Fw[1] * p[2]) * k];
+      const N = n => [R[0] * n[0] + Fw[0] * n[2], n[1], R[1] * n[0] + Fw[1] * n[2]];
+      // paler where the rain washes it, darker under every overhang, and never one even colour
+      const col = (p, n, t) => tone * t * (0.72 + 0.22 * (0.5 + 0.5 * n[1]) + 0.14 * fbm2(p[0] * 5 + seed, p[1] * 5 + p[2] * 3));
+      // path: [x (to its side), y (up), z (toward the arena), half width, half depth]. caps: 1 closes the start, 2 the end
+      function tube(path, sides, caps = 3, t = 1) {
+        const rings = []; let u = null;
+        for (let j = 0; j < path.length; j++) {
+          const p = path[j], a = path[Math.max(0, j - 1)], b = path[Math.min(path.length - 1, j + 1)];
+          let tx = b[0] - a[0], ty = b[1] - a[1], tz = b[2] - a[2]; const tl = Math.hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+          if (!u) { u = [ty, -tx, 0]; if (Math.hypot(u[0], u[1]) < 0.25) u = [0, tz, -ty]; }
+          const dot = u[0] * tx + u[1] * ty + u[2] * tz; u = [u[0] - tx * dot, u[1] - ty * dot, u[2] - tz * dot];      // carried along the path, so the skin never twists
+          const ul = Math.hypot(u[0], u[1], u[2]) || 1; u = [u[0] / ul, u[1] / ul, u[2] / ul];
+          const v = [u[1] * tz - u[2] * ty, u[2] * tx - u[0] * tz, u[0] * ty - u[1] * tx], pts = [], nrm = [];
+          for (let i = 0; i < sides; i++) {
+            const an = (i / sides) * TAU, c = Math.cos(an), sn = Math.sin(an);
+            pts.push([p[0] + u[0] * p[3] * c + v[0] * p[4] * sn, p[1] + u[1] * p[3] * c + v[1] * p[4] * sn, p[2] + u[2] * p[3] * c + v[2] * p[4] * sn]);
+            const nx = u[0] * p[4] * c + v[0] * p[3] * sn, ny = u[1] * p[4] * c + v[1] * p[3] * sn, nz = u[2] * p[4] * c + v[2] * p[3] * sn, nl = Math.hypot(nx, ny, nz) || 1;
+            nrm.push([nx / nl, ny / nl, nz / nl]);
+          }
+          rings.push({ pts, nrm, t: [tx, ty, tz] });
+        }
+        let run = 0;
+        for (let j = 0; j + 1 < rings.length; j++) {
+          const A0 = rings[j], B0 = rings[j + 1], len = Math.hypot(path[j + 1][0] - path[j][0], path[j + 1][1] - path[j][1], path[j + 1][2] - path[j][2]);
+          for (let i = 0; i < sides; i++) {
+            const i2 = (i + 1) % sides, q = [A0.pts[i], A0.pts[i2], B0.pts[i2], B0.pts[i]], n = [A0.nrm[i], A0.nrm[i2], B0.nrm[i2], B0.nrm[i]];
+            bld.addW('marbleCream', q.map(W), n.map(N), [[i * 0.11 + seed, run], [(i + 1) * 0.11 + seed, run], [(i + 1) * 0.11 + seed, run + len], [i * 0.11 + seed, run + len]], q.map((p, e) => C3(col(p, n[e], t))), 'r', sector);
+          }
+          run += len;
+        }
+        for (const [bit, ring, sgn] of [[1, rings[0], -1], [2, rings[rings.length - 1], 1]]) {
+          if (!(caps & bit)) continue;
+          const n = [ring.t[0] * sgn, ring.t[1] * sgn, ring.t[2] * sgn];
+          bld.addW('marbleCream', ring.pts.map(W), N(n), ring.pts.map(p => [p[0] + seed, p[2]]), C3(col(ring.pts[0], n, t)), 'r', sector);
+        }
+      }
+      const bs = [6, 8, 10][lod], ls = [4, 5, 6][lod];
+      const limb = (pts, r0, r1) => tube(pts.map((p, j) => { const r = lerp(r0, r1, j / (pts.length - 1)); return [p[0], p[1], p[2], r, r]; }).concat([[...pts[pts.length - 1].map((v, e) => v + (pts[pts.length - 1][e] - pts[pts.length - 2][e]) * 0.2), r1 * 1.08, r1 * 0.9]]), ls, 2);
+      const stub = (x, y) => tube([[x, y, 0, 0.06, 0.06], [x * 1.16, y - 0.13, 0.02, 0.054, 0.054]], ls, 2, 0.92);        // what is left of a broken arm
+      const head = (y, z = 0) => { if (dmg !== 1) tube([[0, y, z, 0.05, 0.055], [0, y + 0.05, z + 0.004, 0.047, 0.052], [0, y + 0.075, z + 0.012, 0.062, 0.072], [0, y + 0.125, z + 0.014, 0.076, 0.09], [0, y + 0.19, z + 0.006, 0.08, 0.097], [0, y + 0.245, z - 0.004, 0.068, 0.086], [0, y + 0.28, z - 0.01, 0.034, 0.046]], [5, 6, 8][lod], 2); };
+      const foot = (x, z0, z1) => tube([[x, 0.03, z0, 0.046, 0.03], [x, 0.03, z1, 0.042, 0.026]], 4, 3);
+      if (dmg === 3) {                       // gone: two broken feet and a shin on the plinth
+        tube([[-0.1, 0, 0, 0.06, 0.07], [-0.1, 0.1, 0.01, 0.046, 0.05]], ls, 2, 0.9); tube([[0.1, 0, 0.03, 0.06, 0.07], [0.105, 0.2, 0.03, 0.052, 0.056], [0.11, 0.34, 0.035, 0.05, 0.052]], ls, 2, 0.9);
+        return 0.36;
+      }
+      if (kind === 0) {                      // a man in a toga, a scroll in one hand
+        tube([[0, 0, 0, 0.25, 0.19], [0, 0.1, 0, 0.235, 0.18], [0.01, 0.55, 0.01, 0.215, 0.165], [0, 0.95, 0, 0.225, 0.16], [0, 1.15, 0, 0.205, 0.15], [0, 1.34, 0.01, 0.235, 0.155], [0, 1.44, 0, 0.245, 0.14], [0, 1.485, 0, 0.19, 0.12], [0, 1.51, 0, 0.1, 0.09], [0, 1.535, 0, 0.052, 0.055]], bs, 3);
+        tube([[-0.2, 1.47, 0.07, 0.05, 0.05], [-0.02, 1.2, 0.175, 0.06, 0.05], [0.17, 0.9, 0.15, 0.07, 0.05], [0.25, 0.6, 0.05, 0.06, 0.045]], 5, 3, 0.93);      // the fold of the toga across him
+        if (dmg !== 2) limb([[0.25, 1.42, 0], [0.31, 1.15, 0.06], [0.13, 1.22, 0.21]], 0.062, 0.042); else stub(0.25, 1.42);
+        limb([[-0.25, 1.42, 0], [-0.3, 1.12, 0.02], [-0.28, 0.86, 0.1]], 0.06, 0.04);
+        tube([[-0.28, 0.76, 0.09, 0.027, 0.027], [-0.28, 0.99, 0.17, 0.027, 0.027]], 4, 3, 0.9);
+        head(1.535);
+      } else if (kind === 1) {               // an athlete, the discus at his side, leaning on the stump every marble copy needs
+        tube([[-0.2, 0, -0.08, 0.075, 0.075], [-0.2, 0.56, -0.07, 0.055, 0.055]], 5, 2, 0.85);
+        foot(-0.09, -0.05, 0.17); foot(0.145, -0.16, 0.05);
+        tube([[-0.09, 0.02, 0, 0.045, 0.05], [-0.095, 0.3, -0.01, 0.06, 0.065], [-0.09, 0.48, 0, 0.05, 0.052], [-0.1, 0.72, 0, 0.083, 0.088], [-0.09, 0.93, 0, 0.09, 0.09]], ls, 0);
+        tube([[0.14, 0.02, -0.1, 0.045, 0.05], [0.13, 0.3, -0.06, 0.058, 0.063], [0.11, 0.5, 0.04, 0.05, 0.052], [0.1, 0.74, 0.02, 0.083, 0.088], [0.09, 0.93, 0, 0.09, 0.09]], ls, 0);
+        tube([[0, 0.88, 0, 0.17, 0.112], [0.01, 1.02, 0, 0.16, 0.105], [0.015, 1.15, 0, 0.14, 0.1], [0.01, 1.3, 0.01, 0.175, 0.115], [0, 1.43, 0.01, 0.2, 0.115], [0, 1.48, 0.005, 0.165, 0.105], [0, 1.51, 0, 0.095, 0.08], [0, 1.535, 0, 0.052, 0.055]], bs, 3);
+        if (dmg !== 2) { limb([[0.21, 1.43, 0], [0.3, 1.19, 0.02], [0.32, 0.98, 0.08]], 0.056, 0.037); tube([[0.325, 0.9, 0.08, 0.115, 0.115], [0.355, 0.9, 0.08, 0.115, 0.115]], lod ? 10 : 6, 3, 0.95); } else stub(0.21, 1.43);
+        limb([[-0.21, 1.43, 0], [-0.31, 1.5, 0.1], [-0.25, 1.71, 0.17]], 0.054, 0.036);
+        head(1.535);
+      } else if (kind === 2) {               // Minerva: helmet with its crest, a spear in one hand, the other on her shield
+        tube([[0, 0, 0, 0.24, 0.2], [0, 0.1, 0, 0.22, 0.18], [0, 0.5, 0, 0.19, 0.155], [0, 0.95, 0, 0.195, 0.15], [0, 1.0, 0, 0.2, 0.155], [0, 1.02, 0, 0.218, 0.168], [0, 1.06, 0, 0.198, 0.152], [0, 1.16, 0, 0.15, 0.12], [0, 1.24, 0, 0.165, 0.13], [0, 1.38, 0.01, 0.185, 0.14], [0, 1.46, 0, 0.19, 0.115], [0, 1.51, 0, 0.1, 0.085], [0, 1.54, 0, 0.05, 0.053]], bs, 3);
+        head(1.54);
+        if (dmg !== 1) tube([[0, 1.74, 0.115, 0.014, 0.05], [0, 1.865, 0.05, 0.014, 0.06], [0, 1.875, -0.06, 0.014, 0.06], [0, 1.76, -0.135, 0.014, 0.05]], 4, 3, 0.92);
+        if (dmg !== 2) { limb([[0.2, 1.42, 0], [0.33, 1.3, 0.05], [0.345, 1.52, 0.1]], 0.05, 0.036); tube([[0.35, 0, 0.1, 0.017, 0.017], [0.35, 2.22, 0.1, 0.017, 0.017]], 4, 0, 0.8); tube([[0.35, 2.22, 0.1, 0.032, 0.012], [0.35, 2.42, 0.1, 0.004, 0.004]], 4, 1, 0.8); } else stub(0.2, 1.42);
+        limb([[-0.2, 1.42, 0], [-0.3, 1.12, 0.03], [-0.31, 0.76, 0.08]], 0.05, 0.036);
+        tube([[-0.3, 0.36, 0.06, 0.31, 0.31], [-0.325, 0.36, 0.085, 0.31, 0.31], [-0.345, 0.36, 0.105, 0.27, 0.27], [-0.375, 0.36, 0.135, 0.1, 0.1], [-0.385, 0.36, 0.145, 0.03, 0.03]], lod ? 14 : 8, 3, 0.95);   // her shield, standing on its rim, with its boss
+      } else {                               // a general in armour and cloak, his arm raised to speak, a globe in the other hand
+        foot(-0.1, -0.06, 0.16); foot(0.1, -0.03, 0.19);
+        tube([[-0.1, 0.02, 0, 0.05, 0.055], [-0.1, 0.32, 0, 0.062, 0.066], [-0.1, 0.5, 0, 0.052, 0.054], [-0.1, 0.75, 0, 0.085, 0.09]], ls, 0);
+        tube([[0.1, 0.02, 0.03, 0.05, 0.055], [0.1, 0.32, 0.035, 0.062, 0.066], [0.1, 0.5, 0.03, 0.052, 0.054], [0.1, 0.75, 0.01, 0.085, 0.09]], ls, 0);
+        tube([[0, 0.68, 0, 0.215, 0.16], [0, 0.8, 0, 0.2, 0.145], [0, 0.93, 0, 0.185, 0.13]], bs, 1, 0.94);
+        tube([[0, 0.93, 0, 0.18, 0.125], [0, 1.1, 0, 0.165, 0.118], [0, 1.3, 0.01, 0.185, 0.125], [0, 1.43, 0.01, 0.215, 0.125], [0, 1.48, 0.005, 0.175, 0.11], [0, 1.51, 0, 0.1, 0.085], [0, 1.535, 0, 0.052, 0.055]], bs, 3);
+        tube([[-0.19, 1.47, -0.03, 0.075, 0.05], [-0.25, 1.1, -0.09, 0.085, 0.035], [-0.25, 0.62, -0.11, 0.07, 0.025]], 5, 3, 0.9);    // the cloak, down his back from one shoulder
+        if (dmg !== 2) limb([[0.21, 1.43, 0], [0.34, 1.5, 0.12], [0.37, 1.76, 0.22]], 0.058, 0.04); else stub(0.21, 1.43);
+        limb([[-0.21, 1.43, 0], [-0.28, 1.15, 0.04], [-0.2, 1.1, 0.25]], 0.056, 0.04);
+        tube([[-0.2, 1.1, 0.3, 0.03, 0.03], [-0.2, 1.14, 0.3, 0.062, 0.062], [-0.2, 1.2, 0.3, 0.062, 0.062], [-0.2, 1.245, 0.3, 0.03, 0.03]], 6, 3);
+        head(1.535);
+      }
+      return dmg === 1 ? 1.56 : kind === 2 && dmg !== 2 ? 2.42 : kind === 3 && dmg !== 2 ? 1.9 : 1.82;
+    }
+    let last = -1;
+    // which figure stands at place i of a row, and in what state
+    const who = (i, tag) => {
+      let kind = Math.floor(hash(i, 81, tag) * KINDS) % KINDS; if (kind === last) kind = (kind + 1 + Math.floor(hash(i, 82, tag) * (KINDS - 1))) % KINDS; last = kind;
+      const h = hash(i, 83, tag);
+      return { kind, m: hash(i, 84, tag) < 0.5 ? 1 : -1, tone: 0.84 + 0.28 * hash(i, 85, tag), dmg: h < 0.09 ? 3 : h < 0.2 ? 1 : h < 0.29 ? 2 : 0 };
+    };
+    const put = (s, d, y, k, o, lod = 1) => {
+      const top = figure(s, d, y, k, o.kind, o.m, o.tone, o.dmg, lod), [x, z] = ringAt(s, d), r = (o.kind === 2 ? 0.4 : 0.3) * k;
+      STATUES.push({ min: [x - r, y, z - r], max: [x + r, y + top * k, z + r] }); bld.count('statues');
+    };
+    // on the first wall: a pedestal on the coping, midway between two doorways (not where an emperor's box stands in front)
+    { const w = SEC.wall1, top = w.y1 + 0.16, dc = (w.d - 0.06 + w.back + 0.04) / 2;
+      for (let i = 3; i < NB; i += 4) {
+        if ((i >= 17 && i <= 22) || (i >= 57 && i <= 62)) continue;
+        const sc = (i + 0.5) * HB, t = 0.86 + 0.2 * hash(i, 86), hw = x => metres(sc, dc, x);
+        sh.box('trav', sc - hw(0.34), sc + hw(0.34), dc - 0.25, dc + 0.25, top, top + 0.09, { faces: 'ftlrk', col: t * 0.9 });
+        sh.box('trav', sc - hw(0.27), sc + hw(0.27), dc - 0.2, dc + 0.2, top + 0.09, top + 0.5, { faces: 'flrk', col: t, side: t * 0.82, u0: i * 1.3 });
+        sh.box('trav', sc - hw(0.32), sc + hw(0.32), dc - 0.24, dc + 0.24, top + 0.5, top + 0.58, { faces: 'ftlrkb', col: t * 1.04 });
+        put(sc, dc, top + 0.58, 1.05, who(i, 1), 2);
+      } }
+    // in the two higher walls: a niche with a round head, dark behind the figure, on a ledge
+    function niche(w, i, yb, r, ys, k, tag, lod) {
+      const sc = (i + 0.5) * HB, h = metres(sc, w.d, r), fw = metres(sc, w.d, r * 0.22), t = 0.9 + 0.18 * hash(i, 87, tag), K = 8, dF = w.d - 0.07, dD = w.d - 0.012;
+      bld.add('dark', [[sc - h, dD, yb], [sc + h, dD, yb], [sc + h, dD, ys], [sc - h, dD, ys]], [0, -1, 0], [[0, 0], [1, 0], [1, 1], [0, 1]], 1, '');
+      for (let j = 0; j < K; j++) {
+        const a0 = (j / K) * Math.PI, a1 = ((j + 1) / K) * Math.PI, at = (a, e = 1) => [sc + h * e * Math.cos(a), ys + r * e * Math.sin(a)], p0 = at(a0), p1 = at(a1), o0 = at(a0, 1.26), o1 = at(a1, 1.26);
+        bld.add('dark', [[p0[0], dD, p0[1]], [p1[0], dD, p1[1]], [sc, dD, ys]], [0, -1, 0], [[0, 0], [1, 0], [0, 1]], 1, '');
+        bld.add('trav', [[p0[0], dF, p0[1]], [o0[0], dF, o0[1]], [o1[0], dF, o1[1]], [p1[0], dF, p1[1]]], [0, -1, 0], [[p0[0], p0[1]], [o0[0], o0[1]], [o1[0], o1[1]], [p1[0], p1[1]]], t * (0.94 + 0.12 * hash(i, j, 88)), 'r');
+      }
+      sh.box('trav', sc - h - fw, sc - h, dF, w.d, yb, ys, { faces: 'flr', col: t, side: t * 0.7, u0: i });
+      sh.box('trav', sc + h, sc + h + fw, dF, w.d, yb, ys, { faces: 'flr', col: t, side: t * 0.7, u0: i + 3 });
+      sh.box('trav', sc - h - fw * 1.6, sc + h + fw * 1.6, w.d - 0.4, w.d, yb - 0.17, yb, { faces: 'ftlrb', col: t * 1.02, top: t * 1.06 });
+      put(sc, w.d - 0.19, yb, k, who(i, tag), lod);
+    }
+    for (let i = 1; i < NB; i += 4) niche(SEC.wall2, i, SEC.wall2.y0 + 0.42, 0.42, SEC.wall2.y0 + 1.8, 0.86, 2, 1);
+    for (let i = 2; i < NB; i += 4) niche(SEC.wall3, i, SEC.wall3.y0 + 1.1, 0.55, SEC.wall3.y0 + 3.0, 1.15, 3, 0);
+    // in the colonnade: one between every pair of columns, on a plinth
+    { const p = SEC.portico, dc = p.col + 0.3;
+      for (let i = 0; i < NB; i++) {
+        const sc = (i + 0.5) * HB, t = 0.84 + 0.2 * hash(i, 89), hw = x => metres(sc, dc, x);
+        sh.box('trav', sc - hw(0.36), sc + hw(0.36), dc - 0.3, dc + 0.3, p.y, p.y + 0.46, { faces: 'flr', col: t * 0.9, side: t * 0.75, u0: i * 0.7 });
+        sh.box('trav', sc - hw(0.4), sc + hw(0.4), dc - 0.34, dc + 0.34, p.y + 0.46, p.y + 0.54, { faces: 'ftlrb', col: t });
+        put(sc, dc, p.y + 0.54, 1.2, who(i, 4), 0);
+      } }
+  }
+
+  /* ------------------------------------------------------------------ repairs
+     The arena is under restoration: below, containers and sandbags; up here, two timber scaffolds on the walk against
+     the high wall, each under a stretch of lost seats. Poles, ledgers, two plank decks with a guard rail, braces, a
+     ladder, and a sheet of canvas hung over the rail. */
+  function buildRepairs(bld, sh) {
+    const w = SEC.wall3, dF = w.d - 1.0, dB = w.d - 0.16, y0 = w.y0, H = w.y1 - w.y0 + 1.0, lv = [1.8, 3.55];
+    for (const i0 of [11, 51]) {
+      const sA = i0 * HB + 0.2, sB = (i0 + 2) * HB - 0.2, n = 4, ps = k => lerp(sA, sB, k / n), tw = j => 0.5 + 0.3 * hash(i0, j, 95);
+      for (let k = 0; k <= n; k++) for (const [d, back] of [[dF, 0], [dB, 1]]) {            // poles
+        const s = ps(k), hw = metres(s, d, 0.04), t = tw(k * 2 + back);
+        sh.box('timber', s - hw, s + hw, d - 0.04, d + 0.04, y0, y0 + H - back * 0.6 - 0.35 * hash(i0, k, 96), { faces: 'ftlrk', col: t, side: t * 0.8 });
+      }
+      for (const [y, j] of [[0.3, 20], [lv[0] - 0.05, 21], [lv[1] - 0.05, 22], [H - 0.8, 23]]) {     // ledgers along the front and the back
+        sh.box('timber', sA - 0.18, sB + 0.18, dF - 0.085, dF - 0.04, y0 + y - 0.04, y0 + y + 0.04, { faces: 'ftb', col: tw(j) });
+        sh.box('timber', sA - 0.18, sB + 0.18, dB - 0.085, dB - 0.04, y0 + y - 0.04, y0 + y + 0.04, { faces: 'ftb', col: tw(j) * 0.8 });
+      }
+      for (const [y, j] of [[lv[0], 0], [lv[1], 1]]) {
+        for (let k = 0; k <= n; k++) { const s = ps(k), hw = metres(s, dF, 0.035); sh.box('timber', s - hw, s + hw, dF - 0.04, dB + 0.04, y0 + y - 0.045, y0 + y + 0.03, { faces: 'blr', col: 0.45, side: 0.5 }); }   // what the planks lie on
+        for (let q = 0; q < 4; q++) { const da = lerp(dF - 0.06, dB + 0.02, q / 4), db = lerp(dF - 0.06, dB + 0.02, (q + 1) / 4) - 0.012, t = 0.62 + 0.3 * hash(i0, q, 97 + j); sh.box('wood', sA - 0.12 - 0.2 * hash(i0, q, 98 + j), sB + 0.12 + 0.2 * hash(i0, q, 99 + j), da, db, y0 + y + 0.03, y0 + y + 0.075, { faces: 'ftblr', col: t, top: t * 1.05, ku: 1, u0: q * 0.37 }); }   // planks
+        sh.box('timber', sA - 0.05, sB + 0.05, dF - 0.085, dF - 0.045, y0 + y + 1.0, y0 + y + 1.07, { faces: 'ftb', col: tw(30 + j) });                                                                    // guard rail
+      }
+      for (let k = 0; k < n; k++) {                                                             // braces across the front, leaning alternate ways
+        const up = k % 2 === 0, s0 = ps(k), s1 = ps(k + 1), ya = y0 + (up ? 0.3 : lv[0] - 0.05), yb = y0 + (up ? lv[0] - 0.05 : 0.3), t = tw(40 + k), d = dF - 0.09;
+        bld.add('timber', [[s0, d, ya - 0.04], [s1, d, yb - 0.04], [s1, d, yb + 0.04], [s0, d, ya + 0.04]], [0, -1, 0], [[0, 0], [2, 0], [2, 0.08], [0, 0.08]], t, 'r');
+      }
+      { const sl = sB - 0.75, hw = metres(sl, dF, 0.2), rw = metres(sl, dF, 0.025);              // the ladder up to the first deck
+        for (const e of [-1, 1]) sh.box('timber', sl + e * hw - rw, sl + e * hw + rw, dF - 0.15, dF - 0.1, y0, y0 + lv[0] + 0.95, { faces: 'ftlr', col: 0.62 });
+        for (let q = 1; q < 9; q++) sh.box('timber', sl - hw, sl + hw, dF - 0.14, dF - 0.11, y0 + q * 0.3, y0 + q * 0.3 + 0.035, { faces: 'ftb', col: 0.58 });
+      }
+      { const a = ps(1) + 0.15, b2 = ps(2) + 0.35, yt = y0 + lv[1] + 1.07, d = dF - 0.1;       // canvas over the upper rail
+        for (let q = 0; q < 4; q++) { const ya = lerp(yt, yt - 1.5, q / 4), yb = lerp(yt, yt - 1.5, (q + 1) / 4), da = d - 0.04 * Math.sin(q * 1.7 + i0), db = d - 0.04 * Math.sin((q + 1) * 1.7 + i0); bld.add('canvas', [[a, da, ya], [b2, da, ya], [b2, db, yb], [a, db, yb]], [0, -1, 0], [[0, ya], [1.4, ya], [1.4, yb], [0, yb]], 0.8 + 0.12 * (q % 2), 'r'); }
+      }
+      bld.count('scaffolds');
+    }
   }
 
   /* ------------------------------------------------------------------ the top: colonnade, roof, attic wall and masts */
@@ -2099,6 +2318,8 @@ void main(){
       const y = standsY(x, z);
       return y <= maxY && y > g ? y : g;
     };
+    // the statues stop shots (and nothing else): they stand outside the arena, where only a shot can reach
+    for (const b of STATUES) ph.addBox(b.min, b.max, { surface: 'concrete', bulletOnly: true, noNav: true });
     // the outside of the ellipse as boxes, one walk-grid row at a time, set back 0.45 m so the exact wall always wins
     const b = ph.bounds, z0 = b.min.z - 2, z1 = b.max.z, x0 = b.min.x, x1 = b.max.x, ROW = 0.5;
     for (let z = z0; z < z1; z += ROW) {
@@ -2164,6 +2385,8 @@ void main(){
     buildGates(bld, sh, pod);
     buildBoxes(bld, sh, pod);
     buildStands(bld, sh, plan);
+    buildStatues(bld, sh);
+    buildRepairs(bld, sh);
     buildTop(bld, sh);
     buildProxies(bld, sh);
     buildAwning(bld, sh);

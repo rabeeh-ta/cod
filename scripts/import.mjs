@@ -11,10 +11,12 @@
 //   7. the HUD's knife label no longer hides the key-name helper: the clash threw on every frame with keyboard and mouse,
 //      so the grenade markers and the minimap after it never drew
 //   8. the hooks that let a second map take over (scripts/map-hooks.mjs)
+//   9. the hooks that let more guns in (scripts/gun-hooks.mjs)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyMapHooks } from './map-hooks.mjs';
+import { applyGunHooks } from './gun-hooks.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const src = resolve(process.cwd(), process.argv[2] || 'COD.html');
@@ -43,6 +45,7 @@ once("      refillFrags();\n      try { hud.warn(title, 4); } catch { /* fine */
 once("const kn = knife.on ? 'Rifle' : 'Knife'; if (knifeName.textContent !== kn) knifeName.textContent = kn;",
   "const knifeLabel = knife.on ? 'Rifle' : 'Knife'; if (knifeName.textContent !== knifeLabel) knifeName.textContent = knifeLabel;", 'the knife label in the HUD');
 html = applyMapHooks(html);
+html = applyGunHooks(html);
 
 const leftover = html.match(/blend-ed|felix|claude\.ai\/artifact/gi);
 if (leftover) throw new Error(`import: personal references left in the game: ${[...new Set(leftover)].join(', ')}`);

@@ -1,0 +1,106 @@
+{
+ "id": "shotgun",
+ "source": {
+  "author": "SuperMopsek (https://sketchfab.com/pajamakeke)",
+  "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+  "source": "https://sketchfab.com/3d-models/simple-old-shotgun-e20d1457bf8b49d8ade324690de27b4b",
+  "title": "Simple old shotgun"
+ },
+ "bin": "shotgun.bin",
+ "size": [
+  0.04,
+  0.1896,
+  1.0851
+ ],
+ "min": [
+  -0.0196,
+  -0.1069,
+  -0.7044
+ ],
+ "max": [
+  0.0204,
+  0.0826,
+  0.3807
+ ],
+ "triangles": 1539,
+ "points": {
+  "muzzle": [
+   0,
+   0.0627,
+   -0.706
+  ],
+  "sight": [
+   0,
+   0.085,
+   0.02
+  ],
+  "eject": [
+   0.019,
+   0.056,
+   -0.125
+  ],
+  "port": [
+   0,
+   0.01,
+   -0.134
+  ],
+  "support": [
+   0,
+   0.016,
+   -0.4
+  ],
+  "grip": [
+   0,
+   -0.022,
+   0.06
+  ],
+  "butt": [
+   0,
+   -0.002,
+   0.38
+  ]
+ },
+ "materials": [
+  {
+   "name": "MainMat.006",
+   "glass": false,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metalness": 1,
+   "map": "shotgun-0-color.jpg",
+   "orm": "shotgun-0-orm.jpg",
+   "normal": "shotgun-0-normal.jpg",
+   "ao": true
+  }
+ ],
+ "parts": [
+  {
+   "name": "body",
+   "material": 0,
+   "vertices": 1007,
+   "indices": 3393,
+   "wide": false,
+   "at": 0
+  },
+  {
+   "name": "pump",
+   "material": 0,
+   "vertices": 177,
+   "indices": 588,
+   "wide": false,
+   "at": 29952
+  },
+  {
+   "name": "stock",
+   "material": 0,
+   "vertices": 134,
+   "indices": 636,
+   "wide": false,
+   "at": 35200
+  }
+ ]
+}

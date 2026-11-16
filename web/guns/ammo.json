@@ -1,0 +1,169 @@
+{
+ "id": "ammo",
+ "source": {
+  "author": "Guy in a Poncho (https://sketchfab.com/ponchoguy)",
+  "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+  "source": "https://sketchfab.com/3d-models/ammo-set-31b78afb6f544b0386d02be2d7aad5d8",
+  "title": "Ammo Set"
+ },
+ "bin": "ammo.bin",
+ "size": [
+  0.3447,
+  0.2056,
+  0.42
+ ],
+ "min": [
+  -0.1723,
+  0,
+  -0.21
+ ],
+ "max": [
+  0.1723,
+  0.2056,
+  0.21
+ ],
+ "triangles": 8784,
+ "points": {},
+ "materials": [
+  {
+   "name": "50_AE_LP",
+   "glass": false,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metalness": 1,
+   "map": "ammo-0-color.jpg",
+   "orm": "ammo-0-orm.jpg",
+   "normal": "ammo-0-normal.jpg",
+   "ao": true
+  },
+  {
+   "name": "12_gauge_00_buck_LP",
+   "glass": false,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metalness": 1,
+   "map": "ammo-1-color.jpg",
+   "orm": "ammo-1-orm.jpg",
+   "normal": "ammo-1-normal.jpg",
+   "ao": true
+  },
+  {
+   "name": "45_ACP_LP",
+   "glass": false,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metalness": 1,
+   "map": "ammo-2-color.jpg",
+   "orm": "ammo-2-orm.jpg",
+   "normal": "ammo-2-normal.jpg",
+   "ao": true
+  },
+  {
+   "name": "7.62x39_FMJ_LP",
+   "glass": false,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metalness": 1,
+   "map": "ammo-3-color.jpg",
+   "orm": "ammo-3-orm.jpg",
+   "normal": "ammo-3-normal.jpg",
+   "ao": true
+  },
+  {
+   "name": "7.62x51_NATO_LP",
+   "glass": false,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metalness": 1,
+   "map": "ammo-4-color.jpg",
+   "orm": "ammo-4-orm.jpg",
+   "normal": "ammo-4-normal.jpg",
+   "ao": true
+  },
+  {
+   "name": "9x19_JHP_LP",
+   "glass": false,
+   "color": [
+    1,
+    1,
+    1
+   ],
+   "roughness": 1,
+   "metalness": 1,
+   "map": "ammo-5-color.jpg",
+   "orm": "ammo-5-orm.jpg",
+   "normal": "ammo-5-normal.jpg",
+   "ao": true
+  }
+ ],
+ "parts": [
+  {
+   "name": "body",
+   "material": 0,
+   "vertices": 1594,
+   "indices": 4608,
+   "wide": false,
+   "at": 0
+  },
+  {
+   "name": "body",
+   "material": 1,
+   "vertices": 2368,
+   "indices": 6948,
+   "wide": false,
+   "at": 45880
+  },
+  {
+   "name": "body",
+   "material": 2,
+   "vertices": 970,
+   "indices": 2544,
+   "wide": false,
+   "at": 114240
+  },
+  {
+   "name": "body",
+   "material": 3,
+   "vertices": 1082,
+   "indices": 2928,
+   "wide": false,
+   "at": 141640
+  },
+  {
+   "name": "body",
+   "material": 4,
+   "vertices": 1172,
+   "indices": 3168,
+   "wide": false,
+   "at": 172384
+  },
+  {
+   "name": "body",
+   "material": 5,
+   "vertices": 2152,
+   "indices": 6156,
+   "wide": false,
+   "at": 205676
+  }
+ ]
+}

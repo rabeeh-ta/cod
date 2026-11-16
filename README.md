@@ -57,6 +57,17 @@ See [CLAUDE.md](CLAUDE.md) for the Cloudflare stack.
 | `Census` Durable Object | `src/worker.js` | One for the whole game. Counts players online, in Deathmatch and in private rooms for the first screen |
 | Import | `scripts/import.mjs` | Makes `web/index.html` from a claude.ai export with a few small patches that fail loudly if the game changes |
 | Map hooks | `scripts/map-hooks.mjs` | The patches that let a map other than the harbour build itself; the import runs them |
+| Guns | `web/guns.js`, `web/guns/` | The shotgun and the sniper rifle: models, handling, shots, reloads, sounds and the scope; the three gun cards (the model turning, its numbers, its name) on the first screen, on the card shown when down, and on **B** in a match, where the pick is for the next life; the protected seconds after a respawn |
+| Gun models | `scripts/gun-assets.mjs` | Turns a downloaded `.glb` into the small files in `web/guns/` (run once per model, on macOS) |
+| Gun hooks | `scripts/gun-hooks.mjs` | The patches that let more guns into the game and change what a respawn does; the import runs them |
+
+## Credits
+
+The gun and ammunition models come from Sketchfab and are used under their Creative Commons licences:
+
+- Shotgun: "Simple old shotgun" by SuperMopsek, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), https://sketchfab.com/3d-models/simple-old-shotgun-e20d1457bf8b49d8ade324690de27b4b. Textures resized, the pump and stock separated.
+- Ammunition: "Ammo Set" by Guy in a Poncho, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), https://sketchfab.com/3d-models/ammo-set-31b78afb6f544b0386d02be2d7aad5d8. Textures resized, scaled up.
+- Sniper rifle: "SV-98 | Contract Wars" by xlisov, [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/), https://sketchfab.com/3d-models/sv-98-contract-wars-130bd9dd144a4da2971d148dd0098492. One of the two rifles in the file is used; the bolt and magazine separated. Non-commercial use only.
 
 ## Known limits
 
