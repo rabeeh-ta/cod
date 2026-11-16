@@ -881,12 +881,35 @@
       const reset = weapon.reset; weapon.reset = () => { scopeOff(); return reset(); };
       g.events.on('weapon:switch', scopeOff);
       try { gunMenu(g); } catch (e) { console.error('[guns] menu: ' + e); }
-      scopeSetting();
+      scopeSetting(); musicSetting();
       const whenBuilt = setInterval(() => { if (!window.__ready) return; clearInterval(whenBuilt); try { ammoSetup(g); } catch (e) { console.error('[guns] ammo: ' + (e && e.stack || e)); } }, 300);
     },
   });
 
+  /* The music's own volume (Settings, under Master volume). The game mixes music at one fixed level; this scales that
+     level, before the sound engine starts and again whenever the slider moves. Half by default: at full it sat over
+     the footsteps and voices. */
+  const MUSIC_KEY = 'saltline.musicVol', musicVol = () => { const v = parseFloat(read(MUSIC_KEY)); return Number.isFinite(v) ? clamp(v, 0, 1.5) : 0.5; };
+  let musicBase = null, mixer = null;
+  function music(consts) {
+    mixer = consts && consts.gunSound && consts.gunSound.mix; if (!mixer) return;
+    if (musicBase == null) musicBase = mixer.musicBus;
+    mixer.musicBus = musicBase * musicVol();
+    try { if (mixer.musicNode) mixer.musicNode.gain.value = mixer.musicBus; } catch { /* fine */ }
+  }
+  function musicSetting() {
+    const wait = setInterval(() => {
+      const vol = document.getElementById('s-vol'), row = vol && vol.closest('.row'); if (!row) return; clearInterval(wait);
+      const mine = document.createElement('div'); mine.className = 'row';
+      mine.innerHTML = '<label for="s-music">Music volume</label><div class="slider"><input id="s-music" type="range" min="0" max="1.5" step="0.05"><output></output></div>';
+      row.after(mine);
+      const input = mine.querySelector('input'), out = mine.querySelector('output'), show = () => { out.textContent = Math.round(+input.value * 100) + '%'; };
+      input.value = String(musicVol()); show();
+      input.addEventListener('input', () => { write(MUSIC_KEY, input.value); show(); if (G) music(G.consts); });
+    }, 500);
+  }
+
   // sounds must be in the game's table before its sound engine starts: the map script's boot call is the moment
   const boot = window.__SALTLINE_BOOT;
-  window.__SALTLINE_BOOT = async g => { try { sounds(g.consts); } catch (e) { console.error('[guns] sounds: ' + (e && e.stack || e)); } return boot ? boot(g) : undefined; };
+  window.__SALTLINE_BOOT = async g => { try { sounds(g.consts); music(g.consts); } catch (e) { console.error('[guns] sounds: ' + (e && e.stack || e)); } return boot ? boot(g) : undefined; };
 })();

@@ -35,6 +35,9 @@ export function applyGunHooks(html) {
   hook(rx('(§)\\.consts=\\{world:§,sun:§,sky:§,sounds:§\\};'),
     (m, g) => `${m}${g}.consts.gunSound={shot:${synth[5]},rifle:${synth[6]},mix:${mix[1]}};`, 'the constants handed to maps');
 
+  // 2b. the music has its own level in Settings: the mixer's music channel is kept where web/guns.js can reach it
+  hook(rx('music:(§)\\((§)\\.musicBus\\)\\};'), (m, gain, cfg) => `music:${cfg}.musicNode=${gain}(${cfg}.musicBus)};`, 'the music channel');
+
   // 3. the weapon module builds its two guns; more are added to the same table and list before they are set up
   hook(rx('(§)=\\{rifle:(§),pistol:(§)\\},(§)=\\[\\2,\\3\\];'),
     (m, table, rifle, pistol, list) => `${m}${GUNS}&&${GUNS}.build(d,${table},${list});`, 'the table of guns');
@@ -114,6 +117,7 @@ export function applyGunHooks(html) {
   swap(`const RESPAWN_MS = 3500, PROTECT_MS = 2000,`, `const RESPAWN_MS = 4000, PROTECT_MS = 5000,`, 'the respawn and protection times');
   swap(`const r = _shot.call(G.combat, o, d, opts);\n      if (mp.live) {`, `const r = _shot.call(G.combat, o, d, opts);\n      if (mp.live) {\n        if (mp.protectUntil) { mp.protectUntil = 0; P.invulnerable = false; }`, 'a shot ends the protection');
   swap(`    function slash() {\n`, `    function slash() {\n      if (mp.protectUntil) { mp.protectUntil = 0; P.invulnerable = false; mp.dirty = true; }\n`, 'the knife ends the protection');
+  swap(`P.invulnerable = true; if (first) refillFrags();`, `P.invulnerable = true; refillFrags();`, 'grenades on a respawn');      // every life starts with its grenades, not only the first
   swap(`const av = kit.create(); avatars.add(av.group);`, `const av = kit.create(); avatars.add(av.group); try { ${GUNS}.avatar(av); } catch (e) { console.error('[guns] avatar: ' + e); }`, 'a new avatar');
 
   return html;
