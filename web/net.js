@@ -594,6 +594,7 @@
     /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
        whoever goes looking. Add a new entry at the top with each release. */
     const UPDATES = [
+      ['16 Nov 2026', ['The shotgun fires four times faster: tap, tap, tap', 'Scope sensitivity has its own slider in Settings', 'Through the scope the mouse wheel zooms in and out']],
       ['16 Nov 2026', ['Two new guns: the PAC-12 Breakwater shotgun and the PAC-98 Lookout sniper rifle, with a scope', 'Choose your gun on the first screen and each time you go down; B picks the gun for your next life', 'Ammo sets at two places on every map: hold the reload key beside one to restock. A new set arrives 90 seconds later', 'Back in the fight 2 seconds after going down, then protected for 5 seconds (it ends when you fire)', 'The card shown when you go down says what hit you, from how far, and whether it was a headshot', 'Every gun reloads by itself after its last round', 'Statues, doorways and scaffolds in the Colosseum stands']],
       ['16 Nov 2026', ['A second map: the Colosseum, with a map choice on the first screen', 'The minimap and grenade markers draw again', 'The first screen stays dark with a loading line until the map is ready']],
       ['13 Nov 2026', ['A new round restarts every player: position, health and ammo', 'Louder voice chat with its own volume setting, and louder enemy footsteps']],

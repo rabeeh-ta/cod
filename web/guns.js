@@ -34,26 +34,26 @@
     shotgun: {
       name: 'PAC-12 Breakwater', short: 'Shotgun', line: 'Nine pellets. Kills in one shot up close, fades by twenty metres.',
       def: {
-        magSize: 6, reserve: 36, rpm: 68, damage: 15, pellets: 9, range: 70, auto: false, adsTime: 0.2, inspect: false,
-        flashLight: 75, flashScale: 1.55, smoke: true, ownShell: true, reloadAfter: 0.62,     // after the last shell: once the pump has thrown the case out
+        magSize: 6, reserve: 36, rpm: 300, damage: 13, pellets: 9, range: 70, auto: false, adsTime: 0.2, inspect: false,
+        flashLight: 75, flashScale: 1.55, smoke: true, ownShell: true, reloadAfter: 0.22,     // after the last shell: once the pump has thrown the case out
         cone: 0.05, coneAds: 0.038, falloff: [7, 22, 0.22],                 // full damage to 7 m, down to 22% of it at 22 m and beyond
-        spread: { hip: 0.012, ads: 0.006, moveHip: 0.012, moveAds: 0.006, bloomHip: 0.012, bloomAds: 0.006, air: 0.03, crouch: 0.002, shot: 0.6, decay: 1.4 },
+        spread: { hip: 0.012, ads: 0.006, moveHip: 0.012, moveAds: 0.006, bloomHip: 0.012, bloomAds: 0.006, air: 0.03, crouch: 0.002, shot: 0.35, decay: 2.4 },
       },
       kick: { pitch: 0.05, yaw: 0.012, shake: 0.5, back: 2.3, rise: 3.3, yawV: 1.6, roll: 2.4, up: 0.3, side: 0.16 },
       grip: [0, -0.014, 0.068], support: [0, 0.026, -0.3], sightY: 0.087, adsZ: -0.17, hip: [0.012, -0.022, -0.03],     // support: the pump's underside is at 0.005, a hand's cup is 21 mm below its centre
-      cycle: { from: 0.2, back: 0.34, fwd: 0.52, travel: 0.085 },         // the pump after each shot, in seconds since the shot
+      cycle: { from: 0.02, back: 0.08, fwd: 0.17, travel: 0.085 },        // the pump after each shot, in seconds since the shot: a fast slam, done before the next shot (0.2 s)
       reload: { start: 0.46, each: 0.5, insert: 0.3, end: 0.4, rack: 0.62 },
     },
     sniper: {
       name: 'PAC-98 Lookout', short: 'Sniper', line: 'One shot, one bolt. Kills with a single hit; slow to aim and to fire again.',
       def: {
-        magSize: 5, reserve: 25, rpm: 40, damage: 105, range: 400, auto: false, adsTime: 0.34, inspect: false,
-        flashLight: 85, flashScale: 1.7, smoke: true, ownShell: true, adsFov: 15, reloadAfter: 0.4,     // after the last round: straight to the magazine; the bolt is worked at the end
+        magSize: 5, reserve: 25, rpm: 120, damage: 105, range: 400, auto: false, adsTime: 0.34, inspect: false,
+        flashLight: 85, flashScale: 1.7, smoke: true, ownShell: true, adsFov: 15, reloadAfter: 0.3,     // after the last round: straight to the magazine; the bolt is worked at the end
         spread: { hip: 0.055, ads: 0.0002, moveHip: 0.03, moveAds: 0.007, bloomHip: 0.02, bloomAds: 0.004, air: 0.09, crouch: 0.006, shot: 1, decay: 1.2 },
       },
       kick: { pitch: 0.07, yaw: 0.016, shake: 0.62, back: 3.1, rise: 4.2, yawV: 2, roll: 2.6, up: 0.36, side: 0.2 },
       grip: [0, -0.04, 0.055], support: [0, 0.039, -0.27], sightY: 0.1315, adsZ: -0.15, hip: [0.02, -0.05, -0.03],        // support: the fore-end's underside is at 0.018
-      cycle: { from: 0.3, lift: 0.46, back: 0.62, fwd: 0.82, down: 0.96, done: 1.2, travel: 0.085, turn: 1.05 },   // the bolt after each shot
+      cycle: { from: 0.05, lift: 0.11, back: 0.2, fwd: 0.3, down: 0.36, done: 0.46, travel: 0.085, turn: 1.05 },   // the bolt after each shot
       reload: { tac: 2.5, empty: 3.4, atMag: 0.42, out: 0.6, away: 0.95, back: 1.35, insert: 1.72, seat: 1.86, done: 2.3, bolt: 2.3 },
     },
   };
@@ -336,18 +336,20 @@
     return scopeEl;
   }
   function scope(rig, dt) {
-    const has = !!rig.def.adsFov && visible, ads = weapon ? weapon.ads : 0, want = has && ads > 0.82 && G.player && G.player.alive !== false ? 1 : 0;
+    const has = !!rig.def.adsFov && visible, ads = weapon ? weapon.ads : 0, want = has && G.player && G.player.alive !== false ? ease(span(ads, 0.38, 0.72)) : 0;
     if (!has && scopeOn === 0) return;
     scoped = rig;
-    scopeOn = clamp(scopeOn + (want ? dt / 0.07 : -dt / 0.06), 0, 1);
+    zoomNow += (zoomTo - zoomNow) * (1 - Math.exp(-dt * 32));          // the wheel's zoom, eased so it glides
+    // the scope picture comes up as the rifle comes up, and the rifle is gone before its own dark eyepiece can fill the view
+    scopeOn = want > scopeOn ? Math.min(want, scopeOn + dt / 0.05) : Math.max(want, scopeOn - dt / 0.05);
     scopeUi().style.opacity = scopeOn.toFixed(3);
-    const hide = scopeOn > 0.5;
+    const hide = scopeOn > 0.22;
     if (hide === shown) { shown = !hide; rig.model.visible = shown; try { weapon.arms.setVisible(shown && visible); } catch { /* fine */ } }
     // slow the look with the zoom
     const inp = G.input;
     if (inp && typeof inp.sensitivity === 'number') {
       if (baseSens == null || (!has && scopeOn === 0)) baseSens = null;
-      if (has && ads > 0.02) { if (baseSens == null) baseSens = inp.sensitivity; const base = (G.player && G.player.baseFov) || 74; inp.sensitivity = baseSens * lerp(1, Math.tan(rig.def.adsFov * Math.PI / 360) / Math.tan(base * Math.PI / 360), ease(ads)); }
+      if (has && ads > 0.02) { if (baseSens == null) baseSens = inp.sensitivity; const base = (G.player && G.player.baseFov) || 74; inp.sensitivity = baseSens * lerp(1, scopeSens() * Math.tan(zoomNow * Math.PI / 360) / Math.tan(base * Math.PI / 360), ease(ads)); }
       else if (baseSens != null) { inp.sensitivity = baseSens; baseSens = null; }
     }
   }
@@ -356,6 +358,31 @@
     if (!shown) { shown = true; if (scoped) scoped.model.visible = true; if (visible) try { weapon.arms.setVisible(true); } catch { /* fine */ } }
     if (baseSens != null && G && G.input) { G.input.sensitivity = baseSens; baseSens = null; }
   }
+  /* How fast the view turns through the scope, as a share of the matched speed (1 = a hand's movement covers the same
+     distance on screen as without the scope). The player sets it in Settings, under Mouse sensitivity. */
+  const SCOPE_KEY = 'saltline.scopeSens', scopeSens = () => { const v = parseFloat(read(SCOPE_KEY)); return Number.isFinite(v) ? clamp(v, 0.2, 3) : 1; };
+  function scopeSetting() {
+    const wait = setInterval(() => {
+      const sens = document.getElementById('s-sens'), row = sens && sens.closest('.row'); if (!row) return; clearInterval(wait);
+      const mine = document.createElement('div'); mine.className = 'row';
+      mine.innerHTML = '<label for="s-scope">Scope sensitivity</label><div class="slider"><input id="s-scope" type="range" min="0.2" max="3" step="0.05"><output></output></div>';
+      row.after(mine);
+      const input = mine.querySelector('input'), out = mine.querySelector('output'), show = () => { out.textContent = (+input.value).toFixed(2) + 'x'; };
+      input.value = String(scopeSens()); show();
+      input.addEventListener('input', () => { write(SCOPE_KEY, input.value); show(); });
+    }, 500);
+  }
+  /* Through the scope the wheel is the zoom ring: it glides between 2x (41 degrees) and 10x (8.6 degrees), and it does not
+     change weapon (neither does the swap key) until the rifle is lowered. */
+  const ZOOM = { wide: 41.3, tight: 8.6 };                       // against the usual 74 degree view: 2x and 10x. It starts at 2x and then stays where the wheel left it
+  let zoomTo = ZOOM.wide, zoomNow = ZOOM.wide;
+  const inScope = () => scopeOn > 0.15 && !!scoped && !!weapon && weapon.current === scoped.id;
+  window.addEventListener('wheel', e => {
+    if (!inScope()) return;
+    zoomTo = clamp(zoomTo * Math.exp(clamp(e.deltaY, -240, 240) * 0.008), ZOOM.tight, ZOOM.wide);
+    e.stopImmediatePropagation(); e.preventDefault();
+  }, { capture: true, passive: false });
+  window.addEventListener('keydown', e => { if (inScope() && (window.__SALTLINE_KEYS || {})[e.code] === 'swap') { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
   let visible = true, scoped = null;                           // visible: the game is showing the gun (false with the knife or a grenade in hand, and when down)
 
   /* ------------------------------------------------------------------ sound
@@ -611,7 +638,7 @@
 
      The turning guns are the real models, drawn by the game's own renderer into a small picture that is copied onto
      each card (one card a frame, and only while the cards are on screen). The rifle is the game's own model. */
-  const STATS = { rifle: [['Damage', '26'], ['Rate', '720'], ['Rounds', '30']], shotgun: [['Damage', '9 x 15'], ['Rate', '68'], ['Rounds', '6']], sniper: [['Damage', '105'], ['Rate', '40'], ['Rounds', '5']] };
+  const STATS = { rifle: [['Damage', '26'], ['Rate', '720'], ['Rounds', '30']], shotgun: [['Damage', '9 x 13'], ['Rate', '300'], ['Rounds', '6']], sniper: [['Damage', '105'], ['Rate', '120'], ['Rounds', '5']] };
   const picked = [];                                                             // told when a card is chosen
   let cardsEl = null;
   function cards() {
@@ -822,11 +849,12 @@
     attach(g) {
       G = g; weapon = g.weapon; if (!weapon || weapon.__guns) return; weapon.__guns = 1;
       weapon.primary = 'rifle';
-      Object.defineProperty(weapon, 'adsFov', { get: () => { const r = weapon.rigs[weapon.current]; return (visible && r && r.def.adsFov) || 0; } });
+      Object.defineProperty(weapon, 'adsFov', { get: () => { const r = weapon.rigs[weapon.current]; return visible && r && r.def.adsFov ? zoomNow : 0; } });
       const setVisible = weapon.setVisible; weapon.setVisible = b => { visible = !!b; if (!b) scopeOff(); return setVisible(b); };
       const reset = weapon.reset; weapon.reset = () => { scopeOff(); return reset(); };
       g.events.on('weapon:switch', scopeOff);
       try { gunMenu(g); } catch (e) { console.error('[guns] menu: ' + e); }
+      scopeSetting();
       const whenBuilt = setInterval(() => { if (!window.__ready) return; clearInterval(whenBuilt); try { ammoSetup(g); } catch (e) { console.error('[guns] ammo: ' + (e && e.stack || e)); } }, 300);
     },
   });
