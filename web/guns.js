@@ -34,7 +34,7 @@
     shotgun: {
       name: 'PAC-12 Breakwater', short: 'Shotgun', line: 'Nine pellets. Kills in one shot up close, fades by twenty metres.',
       def: {
-        magSize: 6, reserve: 36, rpm: 300, damage: 13, pellets: 9, range: 70, auto: false, adsTime: 0.2, inspect: false,
+        magSize: 6, reserve: 64, rpm: 300, damage: 13, pellets: 9, range: 70, auto: false, adsTime: 0.2, inspect: false,
         flashLight: 75, flashScale: 1.55, smoke: true, ownShell: true, reloadAfter: 0.22,     // after the last shell: once the pump has thrown the case out
         cone: 0.05, coneAds: 0.038, falloff: [7, 22, 0.22],                 // full damage to 7 m, down to 22% of it at 22 m and beyond
         spread: { hip: 0.012, ads: 0.006, moveHip: 0.012, moveAds: 0.006, bloomHip: 0.012, bloomAds: 0.006, air: 0.03, crouch: 0.002, shot: 0.35, decay: 2.4 },
