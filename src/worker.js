@@ -2,15 +2,17 @@
 //   Worker          — serves the game (static assets) and a small API.
 //   Room (DO)       — one Durable Object per room code. Holds up to 10 WebSockets, relays each player's presence
 //                     (position, aim, hits, …) to everyone else, and relays WebRTC signalling for voice chat.
-//   Matchmaker (DO) — one per continent. Knows the public rooms there and how full they are, so quick play
-//                     can drop a player into an open match or start a new one.
+//   Matchmaker (DO) — one per continent and map. Knows the public rooms there and how full they are, so quick
+//                     play can drop a player into an open match on the map they picked, or start a new one.
 //   Census (DO)     — one for the whole game. Every room, public or private, reports its player count here, so the
 //                     first screen and the HUD can show how many people are online and where.
 //
 // API
-//   POST /api/quick              -> 200 { code }                 quick play: an open public room near you
-//   POST /api/rooms              -> 201 { code, max }            create a private room
-//   GET  /api/rooms/:code        -> 200 { exists, players, max } check before joining
+//   POST /api/quick   {map?}     -> 200 { code, map }            quick play: an open public room near you, on that map
+//   POST /api/rooms   {map?}     -> 201 { code, max, map }       create a private room on that map
+//   GET  /api/rooms/:code        -> 200 { exists, players, max, map }  check before joining (the page loads the room's map)
+//                                   A room keeps the map it was made with. No map, or one this server doesn't know,
+//                                   means the harbour ("terminal").
 //   GET  /api/rooms/:code/ws     -> WebSocket upgrade            join (?peer=…&uid=…)
 //   GET  /api/ice?room=CODE      -> 200 { iceServers }           STUN/TURN for voice (TURN when a key is configured)
 //   GET  /api/online             -> 200 { online, dm:{players, matches}, rooms:{players, rooms} }
@@ -34,6 +36,7 @@ const UID_RE = /^[A-Za-z0-9_-]{6,40}$/;
 const EMPTY_TTL_MS = 30 * 60 * 1000; // an empty room is deleted after 30 minutes
 const MAX_MSG_BYTES = 12288;
 const MAX_MSGS_PER_SEC = 60; // presence is ~15/s; voice setup sends a short burst of ICE candidates
+const MAPS = ["terminal", "colosseum"]; // the first is the game's own harbour; the others are the files in web/maps/
 const STUN_ONLY = [{ urls: ["stun:stun.cloudflare.com:3478"] }];
 const CENSUS_AUDIT_MS = 60 * 1000; // how often the census re-checks rooms that have been quiet
 const CENSUS_STALE_MS = 2 * 60 * 1000; // a room quiet this long is asked for its real count
@@ -43,6 +46,16 @@ const json = (data, status = 200) =>
     status,
     headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
+
+// the map a request asks for, from its JSON body
+async function mapOf(request) {
+  try {
+    const body = await request.json();
+    return MAPS.includes(body && body.map) ? body.map : MAPS[0];
+  } catch {
+    return MAPS[0]; // no body: an older page, or a plain POST
+  }
+}
 
 function newCode() {
   const bytes = crypto.getRandomValues(new Uint8Array(CODE_LEN));
@@ -84,15 +97,17 @@ export default {
     if (path === "/api/quick") {
       if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
       const region = String(request.cf?.continent || "XX").replace(/[^A-Z]/g, "") || "XX";
-      const mm = "mm-" + region;
-      const code = await env.MATCH.getByName(mm).assign(mm);
-      return code ? json({ code }) : json({ error: "busy" }, 503);
+      const map = await mapOf(request);
+      const mm = "mm-" + region + (map === MAPS[0] ? "" : "-" + map); // players only meet others on the same map
+      const code = await env.MATCH.getByName(mm).assign(mm, map);
+      return code ? json({ code, map }) : json({ error: "busy" }, 503);
     }
 
     if (path === "/api/rooms") {
       if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-      const code = await createRoom(env, {});
-      return code ? json({ code, max: MAX_PLAYERS }, 201) : json({ error: "busy" }, 503);
+      const map = await mapOf(request);
+      const code = await createRoom(env, { map });
+      return code ? json({ code, max: MAX_PLAYERS, map }, 201) : json({ error: "busy" }, 503);
     }
 
     if (path === "/api/online") {
@@ -109,7 +124,7 @@ export default {
     const m = path.match(/^\/api\/rooms\/([A-Za-z0-9]{6})(\/ws)?$/);
     if (m) {
       const code = m[1].toUpperCase();
-      if (!CODE_RE.test(code)) return json({ exists: false, players: 0, max: MAX_PLAYERS }, 404);
+      if (!CODE_RE.test(code)) return json({ exists: false, players: 0, max: MAX_PLAYERS, map: MAPS[0] }, 404);
       const room = env.ROOMS.getByName(code);
       if (m[2]) {
         if (request.headers.get("Upgrade") !== "websocket") return json({ error: "expected_websocket" }, 426);
@@ -160,14 +175,16 @@ export class Room extends DurableObject {
   async create(code, opts = {}) {
     if (await this.ctx.storage.get("code")) return false; // code already taken
     const now = Date.now();
-    await this.ctx.storage.put({ code, createdAt: now, emptySince: now, ...(opts.mm ? { mm: opts.mm } : {}) });
+    const map = MAPS.includes(opts.map) && opts.map !== MAPS[0] ? opts.map : null; // the harbour is the default and is not stored
+    await this.ctx.storage.put({ code, createdAt: now, emptySince: now, ...(opts.mm ? { mm: opts.mm } : {}), ...(map ? { map } : {}) });
     await this.ctx.storage.setAlarm(now + EMPTY_TTL_MS);
     return true;
   }
 
   async info() {
     const exists = !!(await this.ctx.storage.get("code"));
-    return { exists, players: exists ? this.sockets().length : 0, max: MAX_PLAYERS };
+    const map = (exists && (await this.ctx.storage.get("map"))) || MAPS[0];
+    return { exists, players: exists ? this.sockets().length : 0, max: MAX_PLAYERS, map };
   }
 
   async fetch(request) {
@@ -280,7 +297,7 @@ export class Matchmaker extends DurableObject {
   }
   async save() { await this.ctx.storage.put("rooms", this.map); }
 
-  async assign(name) {
+  async assign(name, map) {
     const rooms = await this.rooms();
     const now = Date.now();
     let best = null, bestLoad = -1;
@@ -290,7 +307,7 @@ export class Matchmaker extends DurableObject {
       if (load < MAX_PLAYERS && load > bestLoad) { best = code; bestLoad = load; }
     }
     if (!best) {
-      best = await createRoom(this.env, { mm: name });
+      best = await createRoom(this.env, { mm: name, map });
       if (!best) return null;
       rooms[best] = { n: 0, pending: 0, t: now };
     }

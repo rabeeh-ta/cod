@@ -27,6 +27,13 @@ const { code } = await created.json();
 ok(created.status === 201 && /^[A-HJ-NP-Z2-9]{6}$/.test(code), `create room -> ${code}`);
 let info = await (await fetch(`${base}/api/rooms/${code}`)).json();
 ok(info.exists && info.players === 0 && info.max === 10, 'room info: exists, 0/10');
+ok(info.map === 'terminal', `a room made without a map plays the harbour (${info.map})`);
+{
+  const post = map => fetch(base + '/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ map }) }).then(r => r.json());
+  const col = await post('colosseum'), bad = await post('atlantis');
+  ok(col.map === 'colosseum' && (await (await fetch(`${base}/api/rooms/${col.code}`)).json()).map === 'colosseum', 'a room keeps the map it was made with (colosseum)');
+  ok(bad.map === 'terminal' && (await (await fetch(`${base}/api/rooms/${bad.code}`)).json()).map === 'terminal', 'an unknown map falls back to the harbour');
+}
 ok(!(await (await fetch(`${base}/api/rooms/ZZZZZ2`)).json()).exists, 'unknown room: exists=false');
 
 const a = client(code, 1); await a.ready; const ha = await a.hello();
@@ -90,6 +97,10 @@ ok(bad.msgs.some(m => m.t === 'error' && m.code === 'not_found'), 'joining an un
   const q1 = (await (await fetch(base + '/api/quick', { method: 'POST' })).json()).code;
   const q2 = (await (await fetch(base + '/api/quick', { method: 'POST' })).json()).code;
   ok(CODE.test(q1) && q1 === q2, `quick play puts players together (${q1}, ${q2})`);
+  const qc = async () => (await fetch(base + '/api/quick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ map: 'colosseum' }) })).json();
+  const c1 = await qc(), c2 = await qc();
+  ok(CODE.test(c1.code) && c1.code === c2.code && c1.code !== q1 && c1.map === 'colosseum', `quick play keeps maps apart (harbour ${q1}, colosseum ${c1.code})`);
+  ok((await (await fetch(`${base}/api/rooms/${c1.code}`)).json()).map === 'colosseum', 'a quick-play room knows its map');
   const qs = [];
   for (let i = 0; i < 10; i++) { const c = client(q1, 30 + i); qs.push(c); await c.ready; await c.hello(); }
   await sleep(300);

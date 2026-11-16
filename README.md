@@ -8,6 +8,8 @@ The first screen has three ways to play:
 - **Room**: private. Create a room to get a 6-character code and invite link (`/r/ABC123`), or join one with a code. Inside the room you pick Deathmatch or Team play (Gate vs Quay). Up to 10 players.
 - **Solo**: the single-player mission.
 
+Above them is the **Map** picker: **Saltline Terminal** (the harbour) or **Colosseum** (the arena of the Colosseum under restoration, an hour after a storm). Quick play matches you with players on the same map, a room keeps the map it was made with, and a room link loads that room's map for whoever opens it. Solo is set in the harbour.
+
 Voice chat works in every online match. Press **V** (or the MIC button on touch) to talk. You hear the players in your match, and in Team play only your own team. **Settings → Voice chat volume** sets how loud other players are, from 0 to 400% (200% to start).
 
 ## Run it
@@ -47,11 +49,14 @@ See [CLAUDE.md](CLAUDE.md) for the Cloudflare stack.
 |---|---|---|
 | Game | `web/index.html` | The game, served as a static asset |
 | Network adapter | `web/net.js` | Stands in for the claude.ai runtime the game was written for, plus the first screen and voice (WebRTC, peer to peer) |
+| Map choice | `web/maps.js` | Decides which map this page load builds (a link, the room, or the player's last pick) before the game starts |
+| Colosseum | `web/maps/colosseum.js` | The second map: stonework, cover, light and collision, built in code when it is picked |
 | Worker | `src/worker.js` | `/api/*` routes |
 | `Room` Durable Object | `src/worker.js` | One per room code. Holds up to 10 WebSockets, relays player state, relays voice-call setup. Deletes itself 30 min after it empties |
 | `Matchmaker` Durable Object | `src/worker.js` | One per continent. Tracks public rooms and fills the fullest open one first |
 | `Census` Durable Object | `src/worker.js` | One for the whole game. Counts players online, in Deathmatch and in private rooms for the first screen |
 | Import | `scripts/import.mjs` | Makes `web/index.html` from a claude.ai export with a few small patches that fail loudly if the game changes |
+| Map hooks | `scripts/map-hooks.mjs` | The patches that let a map other than the harbour build itself; the import runs them |
 
 ## Known limits
 

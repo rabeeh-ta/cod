@@ -8,9 +8,13 @@
 //   4. load /net.js (the Cloudflare adapter) right before the multiplayer layer
 //   5. louder enemy footsteps: more gain point blank, a gentler fade with distance (hearing ranges unchanged), quieter teammates
 //   6. a new round restarts every player: new spawn point, full health and ammo (it used to reset only the kill counts)
+//   7. the HUD's knife label no longer hides the key-name helper: the clash threw on every frame with keyboard and mouse,
+//      so the grenade markers and the minimap after it never drew
+//   8. the hooks that let a second map take over (scripts/map-hooks.mjs)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { applyMapHooks } from './map-hooks.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const src = resolve(process.cwd(), process.argv[2] || 'COD.html');
@@ -36,6 +40,9 @@ once("const STEP = { run: 26, walk: 18, crouch: 6, gRun: 2.5, gWalk: 2, gCrouch:
 once("* Math.pow(near, 1.5) * (mate ? .4 : 1);", "* Math.pow(near, 1.1) * (mate ? .25 : 1);", 'the footstep distance fade');
 once("hint: 'Kills reset · new round is live'", "hint: 'New round · everyone starts fresh'", 'the round-over hint');
 once("      refillFrags();\n      try { hud.warn(title, 4); } catch { /* fine */ }", "      refillFrags();\n      respawn(false); // a new round is a clean start for everyone: new spawn point, full health, full ammo, down or not\n      try { hud.warn(title, 4); } catch { /* fine */ }", 'the round-over restart');
+once("const kn = knife.on ? 'Rifle' : 'Knife'; if (knifeName.textContent !== kn) knifeName.textContent = kn;",
+  "const knifeLabel = knife.on ? 'Rifle' : 'Knife'; if (knifeName.textContent !== knifeLabel) knifeName.textContent = knifeLabel;", 'the knife label in the HUD');
+html = applyMapHooks(html);
 
 const leftover = html.match(/blend-ed|felix|claude\.ai\/artifact/gi);
 if (leftover) throw new Error(`import: personal references left in the game: ${[...new Set(leftover)].join(', ')}`);

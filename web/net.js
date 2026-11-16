@@ -520,9 +520,27 @@
       .net-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--signal, #ffb347); animation: net-pulse 2.4s ease-in-out infinite; }
       .net-mode em { grid-column: 1; margin-top: 4px; font: 500 11px/1.2 var(--f-mono, monospace); font-style: normal; letter-spacing: .12em; text-transform: uppercase; color: var(--signal, #ffb347); }
       .net-mode em:empty { display: none; }
+      /* map: the game's own segmented control, as on its settings panel */
+      .net-map { display: grid; gap: 8px; margin-top: 16px; }
+      .net-map[hidden] { display: none; }
+      .net-map .seg button { min-height: 36px; font-size: 12px; background: rgba(11, 13, 15, .45); }
+      .net-map .seg button[aria-pressed="true"] { background: var(--bone, #e8e4da); }
+      .net-map .seg button:disabled { opacity: .6; cursor: default; }
 
       /* while the first screen is up, only the 3D scene shows behind it */
       html.net-gate-open #ui, html.net-gate-open #boot { visibility: hidden; }
+      /* ... and only once it is a scene. While the game loads, its view holds scratch pictures (a blurred sky, a dark
+         square), so the view stays dark until the first real frames, then the map comes up behind the menu. Meanwhile
+         the first screen carries the game's own loading line and bar (its loading screen is hidden under this one). */
+      #view { transition: opacity .9s ease; }
+      html:not(.net-scene) #view { opacity: 0; }
+      .net-load { position: absolute; right: max(var(--gr, 16px), 6vw); bottom: max(28px, env(safe-area-inset-bottom)); display: grid; justify-items: end; gap: 14px;
+        pointer-events: none; transition: opacity .4s ease; }
+      .net-load .boot-sub { text-align: right; }
+      .net-load .boot-bar { width: min(240px, 40vw); }
+      html.net-scene .net-load { opacity: 0; }
+      @media (max-width: 900px) { .net-load { display: none; } }
+      @media (prefers-reduced-motion: reduce) { #view, .net-load { transition: none; } }
       /* quick play has no room lobby: the first screen is home, so the game's title screen must never paint, not even for a frame */
       html.net-public #ui .m-title { visibility: hidden !important; }
       /* the room lobby: solo lives on the first screen now, and there is no permissions menu outside claude.ai */
@@ -537,6 +555,7 @@
         <div class="net-eyebrow"><span class="tag">B4</span><span data-net-stat="online">Up to 10 players a match</span></div>
         <h1 class="net-word">SALTLINE</h1>
         <label class="net-name"><span>Your name</span><input class="net-in" data-net="name" maxlength="16" placeholder="Breacher" autocomplete="off" spellcheck="false"></label>
+        <div class="net-map" hidden><span class="net-k" id="net-map-l">Map</span><div class="seg" role="group" aria-labelledby="net-map-l"></div></div>
         <div class="net-modes">
           <button type="button" class="net-mode lead" data-net="dm"><b>Deathmatch</b><span>Jump into an open match. Everyone for themselves.</span><em data-net-stat="dm"></em><i>&rarr;</i></button>
           <button type="button" class="net-mode" data-net="room" aria-expanded="false"><b>Room</b><span>Play with friends. Make a room and share the code.</span><em data-net-stat="rooms"></em><i>+</i></button>
@@ -557,10 +576,40 @@
     const allBtns = () => [...gate.querySelectorAll('button')];
 
     new MutationObserver(() => document.documentElement.classList.toggle('net-gate-open', !gate.hidden)).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
+    // the loading line: a copy of the game's own, shown until the scene is up (see .net-load above)
+    const load = document.createElement('div'); load.className = 'net-load'; load.setAttribute('aria-hidden', 'true');
+    load.innerHTML = '<div class="boot-sub"></div><div class="boot-bar"><i></i></div>';
+    gate.appendChild(load);
+    const sceneUp = setInterval(() => {
+      const msg = document.getElementById('boot-msg'), fill = document.getElementById('boot-fill');
+      if (msg) load.firstChild.textContent = msg.textContent;
+      if (fill) load.lastChild.firstChild.style.width = fill.style.width;
+      if (window.__ready || window.__fatal) { clearInterval(sceneUp); document.documentElement.classList.add('net-scene'); }
+    }, 80);
     const badge = document.createElement('div'); badge.className = 'net-badge'; badge.hidden = true;
     const talk = document.createElement('div'); talk.className = 'net-talk';
 
     let count = 0, busy = false, joiningDm = false;
+    /* Maps. The game builds one map per page load (see web/maps.js), so picking another reloads the page into it.
+       Quick play and new rooms use the map on screen; a room keeps its map, and joining one loads that map first. */
+    const maps = window.__saltlineMaps || { list: [{ id: 'terminal', name: 'Saltline Terminal' }], id: 'terminal', ready: Promise.resolve('terminal'), name: () => 'Saltline Terminal', choose: () => false };
+    const mapId = () => maps.id, loadingText = () => (mapId() === 'terminal' ? 'Loading the yard…' : 'Loading the arena…');   // a room link learns its map a moment after the page starts, so always ask
+    const post = path => fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ map: mapId() }) });
+    // reload into a map (and a path) without changing the one the player has chosen as theirs
+    const visit = (id, path) => maps.choose(id, path, false) || (location.assign(path), true);
+    const mapBox = $('.net-map'), mapSeg = mapBox.querySelector('.seg');
+    if (maps.list.length > 1) {
+      mapBox.hidden = false;
+      for (const m of maps.list) { const b = document.createElement('button'); b.type = 'button'; b.dataset.map = m.id; b.textContent = m.name; mapSeg.appendChild(b); }
+      const paint = () => { for (const x of mapSeg.children) x.setAttribute('aria-pressed', String(x.dataset.map === mapId())); $('[data-net="solo"] span').textContent = mapId() === 'terminal' ? 'The mission. Cut the relays and hold the berth.' : 'The mission, on Saltline Terminal.'; };
+      paint(); maps.ready.then(paint);
+      mapSeg.addEventListener('click', ev => {
+        const b = ev.target.closest('button[data-map]'); if (!b || b.disabled || busy || b.dataset.map === mapId()) return;
+        for (const x of mapSeg.children) x.setAttribute('aria-pressed', String(x === b));
+        setBusy(true); status('Loading ' + maps.name(b.dataset.map) + '…', 'busy');
+        maps.choose(b.dataset.map, '/');
+      });
+    }
     const status = (t, kind) => { statusEl.textContent = t || ''; statusEl.className = 'net-status' + (kind ? ' ' + kind : ''); };
     const setBusy = b => { busy = b; for (const x of allBtns()) x.disabled = b; };
     const showGate = () => { if (!gate.hidden) return; gate.hidden = false; setBusy(false); };
@@ -595,14 +644,14 @@
         setBusy(false);
         return;
       }
-      if (session.kind) { location.assign('/?play=dm'); return; } // the game connects once per page; start over
+      if (session.kind) { visit(mapId(), '/?play=dm'); return; } // the game connects once per page; start over, on the same map
       setBusy(true); status('Finding a match…', 'busy');
       try {
-        const r = await fetch('/api/quick', { method: 'POST' });
+        const r = await post('/api/quick');
         if (!r.ok) throw new Error(String(r.status));
         const { code } = await r.json();
         startRoom(code, 'public');
-        status(gameState() === 'title' ? 'Joining the match…' : 'Loading the yard…', 'busy');
+        status(gameState() === 'title' ? 'Joining the match…' : loadingText(), 'busy');
         joiningDm = true;
         const ok = await press('.mp-lobby [data-mp="join-dm"]', 30000);
         joiningDm = false;
@@ -622,7 +671,7 @@
       if (busy) return;
       setBusy(true); status('Creating a room…', 'busy');
       try {
-        const r = await fetch('/api/rooms', { method: 'POST' });
+        const r = await post('/api/rooms');
         if (!r.ok) throw new Error(String(r.status));
         const { code } = await r.json();
         status('');
@@ -639,12 +688,14 @@
         const info = await (await fetch('/api/rooms/' + code)).json();
         if (!info.exists) status(`No room ${code}. It may have expired.`, 'err');
         else if (info.players >= info.max) status(`Room ${code} is full (${info.max} players).`, 'err');
+        else if (info.map && info.map !== mapId() && maps.list.some(m => m.id === info.map)) { status('Loading ' + maps.name(info.map) + '…', 'busy'); visit(info.map, '/r/' + code); return; } // the room plays another map: load it, then join
         else { status(''); enterPrivate(code); }
       } catch { status('Could not reach the server. Check your connection and try again.', 'err'); }
       setBusy(false);
     }
     async function solo() {
       if (busy) return;
+      if (mapId() !== 'terminal') { setBusy(true); status('Loading Saltline Terminal…', 'busy'); visit('terminal', '/?play=solo'); return; } // the mission is set in the harbour
       if (session.kind === 'public' || session.kind === 'private') { location.assign('/?play=solo'); return; }
       if (!session.kind) { session.kind = 'solo'; resolveRoom(null); }
       setBusy(true); status(gameState() === 'title' ? '' : 'Loading the yard…', 'busy');
@@ -770,7 +821,7 @@
       const showBadge = session.kind === 'private' && onTitle && gate.hidden;
       if (badge.hidden === showBadge) badge.hidden = !showBadge;
       const room = document.querySelector('[data-net-room]');
-      const roomText = session.code && session.kind !== 'dead' ? (session.kind === 'public' ? 'Open match' : 'Room ' + session.code) : 'Online room';
+      const roomText = session.code && session.kind !== 'dead' ? (session.kind === 'public' ? 'Open match' : 'Room ' + session.code) + ' · ' + maps.name(mapId()) : 'Online room';
       if (room && room.textContent !== roomText) room.textContent = roomText;
       online((session.kind === 'public' || session.kind === 'private') && (st === 'playing' || st === 'paused'));
       gateStats();
@@ -787,7 +838,12 @@
       const path = location.pathname.match(/^\/r\/([A-Za-z0-9]{6})\/?$/);
       const code = path ? path[1].toUpperCase() : '';
       const play = new URLSearchParams(location.search).get('play');
-      if (CODE_RE.test(code)) { startRoom(code, 'private'); renderBadge(); return; }
+      if (CODE_RE.test(code)) {
+        startRoom(code, 'private'); renderBadge();
+        // maps.js already asked this room for its map before the game started; if that answer came too late, load the right map now
+        Promise.all([fetch('/api/rooms/' + code).then(r => r.json()), maps.ready]).then(([info, now]) => { if (info && info.exists && info.map && info.map !== now && maps.list.some(m => m.id === info.map)) visit(info.map, '/r/' + code); }).catch(() => {});
+        return;
+      }
       if (location.search) history.replaceState(null, '', '/');
       gate.hidden = false;
       if (play === 'dm') quickPlay();
@@ -802,7 +858,7 @@
         session.kind = 'dead'; session.code = '';
         badge.hidden = true;
         if (kind === 'public') { // the open match filled up between finding it and joining: find another
-          if (quickTry < 3) { location.assign('/?play=dm&try=' + (quickTry + 1)); return; }
+          if (quickTry < 3) { visit(mapId(), '/?play=dm&try=' + (quickTry + 1)); return; }
           showGate(); status('Every open match filled up just now. Try again.', 'err');
           return;
         }
