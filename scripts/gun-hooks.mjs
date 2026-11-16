@@ -117,6 +117,10 @@ export function applyGunHooks(html) {
   swap(`const RESPAWN_MS = 3500, PROTECT_MS = 2000,`, `const RESPAWN_MS = 4000, PROTECT_MS = 5000,`, 'the respawn and protection times');
   swap(`const r = _shot.call(G.combat, o, d, opts);\n      if (mp.live) {`, `const r = _shot.call(G.combat, o, d, opts);\n      if (mp.live) {\n        if (mp.protectUntil) { mp.protectUntil = 0; P.invulnerable = false; }`, 'a shot ends the protection');
   swap(`    function slash() {\n`, `    function slash() {\n      if (mp.protectUntil) { mp.protectUntil = 0; P.invulnerable = false; mp.dirty = true; }\n`, 'the knife ends the protection');
+  // 13. the head that can be hit is the head that is drawn. The game guessed where a player's head was (70 cm to the side
+  //     when peeking) while the figure's head only leans about 30 cm, so a shot at the visible head went through
+  swap(`        const th = raySphere(o, d, x + lx, y + 1.63 - drop, z + lz, .17, lim);`,
+    `        let hx = x + lx, hy = y + 1.63 - drop, hz = z + lz; try { const hb = R.av && R.av.J && R.av.J.head, hv = G.__headAt || (G.__headAt = new T.Vector3()); if (hb) { hb.bone.getWorldPosition(hv); hx = hv.x; hy = hv.y + .09; hz = hv.z; } } catch { /* the estimate above */ }\n        const th = raySphere(o, d, hx, hy, hz, .18, lim);`, 'where a head can be hit');
   swap(`P.invulnerable = true; if (first) refillFrags();`, `P.invulnerable = true; refillFrags();`, 'grenades on a respawn');      // every life starts with its grenades, not only the first
   swap(`const av = kit.create(); avatars.add(av.group);`, `const av = kit.create(); avatars.add(av.group); try { ${GUNS}.avatar(av); } catch (e) { console.error('[guns] avatar: ' + e); }`, 'a new avatar');
 

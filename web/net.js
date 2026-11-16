@@ -594,6 +594,7 @@
     /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
        whoever goes looking. Add a new entry at the top with each release. */
     const UPDATES = [
+      ['16 Nov 2026', ['A shot at the head of a player who is peeking now counts']],
       ['16 Nov 2026', ['Music has its own volume in Settings, and starts at half', 'Every life starts with its grenades again']],
       ['16 Nov 2026', ['Four seconds on the card when you go down, with a pointer to pick your gun', 'The shotgun carries 64 spare shells']],
       ['16 Nov 2026', ['The shotgun fires four times faster: tap, tap, tap', 'Scope sensitivity has its own slider in Settings', 'Through the scope the mouse wheel zooms in and out']],

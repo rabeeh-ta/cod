@@ -7401,7 +7401,8 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
         const drop = R.crouchT * .45, x = R.pos.x, y = R.pos.y, z = R.pos.z;
         const tb = rayCapsuleY(o, d, x, z, y + .3, y + 1.17 - drop, .3, lim);
         const lx = Math.cos(R.yaw) * R.lean * .7, lz = -Math.sin(R.yaw) * R.lean * .7; // a peeking head is out past the body
-        const th = raySphere(o, d, x + lx, y + 1.63 - drop, z + lz, .17, lim);
+        let hx = x + lx, hy = y + 1.63 - drop, hz = z + lz; try { const hb = R.av && R.av.J && R.av.J.head, hv = G.__headAt || (G.__headAt = new T.Vector3()); if (hb) { hb.bone.getWorldPosition(hv); hx = hv.x; hy = hv.y + .09; hz = hv.z; } } catch { /* the estimate above */ }
+        const th = raySphere(o, d, hx, hy, hz, .18, lim);
         if (th >= 0 && (tb < 0 || th <= tb + .2)) { lim = th; got = R; part = 'weak'; }
         else if (tb >= 0) { lim = tb; got = R; part = 'body'; }
       }
