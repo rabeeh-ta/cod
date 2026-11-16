@@ -6735,7 +6735,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
   const PALETTE = ['#ff6b5e', '#ff9f43', '#ffd75e', '#9fd66b', '#4fd1a5', '#5fd3dc', '#6fa8ff', '#b08cff', '#ff7fc8', '#e8e4da'];
   const SHADES = ['Red', 'Orange', 'Yellow', 'Green', 'Mint', 'Cyan', 'Blue', 'Violet', 'Pink', 'Bone'];
   const isHex = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
-  const RESPAWN_MS = 2000, PROTECT_MS = 5000, SEND_DT = 1 / 15, ROUND_MS = 300000;
+  const RESPAWN_MS = 4000, PROTECT_MS = 5000, SEND_DT = 1 / 15, ROUND_MS = 300000;
   const roundNow = () => Math.floor(Date.now() / ROUND_MS), roundLeft = () => ROUND_MS - Date.now() % ROUND_MS;
   const clock = ms => { const t = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
   const cleanName = v => typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16) : '';

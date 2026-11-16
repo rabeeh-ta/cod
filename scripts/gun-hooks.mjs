@@ -109,9 +109,9 @@ export function applyGunHooks(html) {
   swap(`const knifeLabel = knife.on ? 'Rifle' : 'Knife';`, `const knifeLabel = knife.on ? ${GUNS}.short(G.weapon.primary) : 'Knife';`, 'the label beside the knife key');
   swap(`try { G.weapon.equip('rifle'); } catch { /* fine */ } if (play) setKnife(true);`, `try { G.weapon.equip(G.weapon.primary || 'rifle'); } catch { /* fine */ } if (play) setKnife(true);`, 'the retired sidearm');
 
-  // 12. coming back. Two seconds on the card, then five seconds in which nothing can hurt the player: others see them
+  // 12. coming back. Four seconds on the card (time to pick a gun with the pointer), then five seconds in which nothing can hurt the player: others see them
   //     with a white glow round their outline, and it ends at once if they shoot or use the knife
-  swap(`const RESPAWN_MS = 3500, PROTECT_MS = 2000,`, `const RESPAWN_MS = 2000, PROTECT_MS = 5000,`, 'the respawn and protection times');
+  swap(`const RESPAWN_MS = 3500, PROTECT_MS = 2000,`, `const RESPAWN_MS = 4000, PROTECT_MS = 5000,`, 'the respawn and protection times');
   swap(`const r = _shot.call(G.combat, o, d, opts);\n      if (mp.live) {`, `const r = _shot.call(G.combat, o, d, opts);\n      if (mp.live) {\n        if (mp.protectUntil) { mp.protectUntil = 0; P.invulnerable = false; }`, 'a shot ends the protection');
   swap(`    function slash() {\n`, `    function slash() {\n      if (mp.protectUntil) { mp.protectUntil = 0; P.invulnerable = false; mp.dirty = true; }\n`, 'the knife ends the protection');
   swap(`const av = kit.create(); avatars.add(av.group);`, `const av = kit.create(); avatars.add(av.group); try { ${GUNS}.avatar(av); } catch (e) { console.error('[guns] avatar: ' + e); }`, 'a new avatar');

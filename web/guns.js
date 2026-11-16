@@ -491,9 +491,10 @@
       if (killer && headshot) bits.push('Headshot');
       how.textContent = bits.join('  ·  ');
       mount(card.querySelector('.gun-pick'), true);
+      pointer(card);
     },
     // a spawn takes up the gun that was chosen, and starts the protected seconds
-    spawn(g) { scopeOff(); const w = g.weapon, id = api.choice(); if (w && w.rigs[id]) { w.primary = id; w.slots[0] = w.rigs[id].slot; if (w.current !== id) w.equip(id); } shield(g); },
+    spawn(g) { scopeOff(); if (ptr) ptr.style.display = 'none'; if (cardsEl) for (const b of cardsEl.children) b.classList.remove('at'); const w = g.weapon, id = api.choice(); if (w && w.rigs[id]) { w.primary = id; w.slots[0] = w.rigs[id].slot; if (w.current !== id) w.equip(id); } shield(g); },
     /* Protection after a spawn, as others see it: the player's outline glows white and flickers. The glow is added to
        that avatar's own materials when it is made (a rim that is bright where the surface turns away from the eye), and
        switched on from the pose the game gives it every frame. */
@@ -677,6 +678,32 @@
     cardsEl.addEventListener('click', e => { const b = e.target.closest('[data-gun]'); if (!b) return; api.pick(b.dataset.gun); mark(); for (const f of picked) f(b.dataset.gun); });
     mark();
     return cardsEl;
+  }
+  /* A pointer for the card shown when down. The game keeps the mouse captured, so the browser shows no cursor: this
+     draws one that follows the mouse, lights the card under it and takes that card on a click. It is there only while
+     the card is up, and it is not needed (and not shown) where the mouse is free or the screen is touched. */
+  let ptr = null, ptrCard = null, px = 0, py = 0;
+  function pointer(card) {
+    if (!ptr) {
+      const css = document.createElement('style');
+      css.textContent = '.gun-pointer { position: fixed; left: 0; top: 0; z-index: 2000; width: 22px; height: 22px; pointer-events: none; display: none; filter: drop-shadow(0 1px 2px rgba(0,0,0,.8)); }';
+      document.head.appendChild(css);
+      ptr = document.createElement('div'); ptr.className = 'gun-pointer'; ptr.setAttribute('aria-hidden', 'true');
+      ptr.innerHTML = '<svg viewBox="0 0 22 22" width="22" height="22"><path d="M2 1.5v16l4.4-3.9 2.9 6.6 2.6-1.1-2.9-6.5H15z" fill="#e8e4da" stroke="#0b0d0f" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+      document.body.appendChild(ptr);
+      const under = () => { const el = document.elementFromPoint(px, py), c = el && el.closest ? el.closest('.gun-card') : null; if (cardsEl) for (const b of cardsEl.children) b.classList.toggle('at', b === c); return c; };
+      const up = () => ptrCard && ptrCard.classList.contains('on') && !!document.pointerLockElement;
+      document.addEventListener('mousemove', e => {
+        if (!up()) { if (ptr.style.display !== 'none') { ptr.style.display = 'none'; if (cardsEl && !(menuEl && menuEl.classList.contains('on'))) for (const b of cardsEl.children) b.classList.remove('at'); } return; }
+        px = clamp(px + (e.movementX || 0), 0, innerWidth - 2); py = clamp(py + (e.movementY || 0), 0, innerHeight - 2);
+        ptr.style.display = 'block'; ptr.style.transform = `translate(${px}px, ${py}px)`; under();
+      }, true);
+      document.addEventListener('mousedown', e => { if (!up()) return; const c = under(); if (c) { api.pick(c.dataset.gun); mark(); } e.stopImmediatePropagation(); e.preventDefault(); }, true);
+    }
+    ptrCard = card;
+    // start on the cards, so one small move reaches any of them
+    const r = cardsEl ? cardsEl.getBoundingClientRect() : null; px = r && r.width ? r.left + r.width / 2 : innerWidth / 2; py = r && r.height ? r.top + r.height / 2 : innerHeight / 2;
+    if (document.pointerLockElement) { ptr.style.display = 'block'; ptr.style.transform = `translate(${px}px, ${py}px)`; }
   }
   const mark = () => { if (!cardsEl) return; const id = api.choice(); for (const b of cardsEl.children) b.setAttribute('aria-pressed', String(b.dataset.gun === id)); };
   function mount(host, size) { const el = cards(); el.classList.toggle('compact', size === true || size === 'compact'); el.classList.toggle('big', size === 'big'); for (const b of el.children) b.classList.remove('at'); if (el.parentNode !== host) host.appendChild(el); mark(); spin(); return el; }      // size: 'compact', 'big' or nothing
