@@ -121,6 +121,7 @@ export function applyGunHooks(html) {
   //     when peeking) while the figure's head only leans about 30 cm, so a shot at the visible head went through
   swap(`        const th = raySphere(o, d, x + lx, y + 1.63 - drop, z + lz, .17, lim);`,
     `        let hx = x + lx, hy = y + 1.63 - drop, hz = z + lz; try { const hb = R.av && R.av.J && R.av.J.head, hv = G.__headAt || (G.__headAt = new T.Vector3()); if (hb) { hb.bone.getWorldPosition(hv); hx = hv.x; hy = hv.y + .09; hz = hv.z; } } catch { /* the estimate above */ }\n        const th = raySphere(o, d, hx, hy, hz, .18, lim);`, 'where a head can be hit');
+  swap(`const FRAG = { count: 4, regen: 120000,`, `const FRAG = { count: 4, regen: 30000,`, 'how long a grenade takes to come back');      // 30 seconds each, down from two minutes
   swap(`P.invulnerable = true; if (first) refillFrags();`, `P.invulnerable = true; refillFrags();`, 'grenades on a respawn');      // every life starts with its grenades, not only the first
   swap(`const av = kit.create(); avatars.add(av.group);`, `const av = kit.create(); avatars.add(av.group); try { ${GUNS}.avatar(av); } catch (e) { console.error('[guns] avatar: ' + e); }`, 'a new avatar');
 
