@@ -369,7 +369,7 @@ kbd { display: inline-block; font: 500 10px/1 var(--f-mono); color: var(--bone);
 </style>
 <style>
 /* ---- multiplayer layer: lobby cards, name tags, scoreboard. Same signage look as the game; Gate is the amber signal, Quay the cold sea. ---- */
-:root { --gate: #ffb347; --quay: #5fd3dc; }
+:root { --gate: #ff4b3e; --quay: #3f8cff; }
 
 /* lobby replaces the title content until "Play solo" */
 .mp .menu:not(.mp-solo) .m-title-main > :not(.mp-lobby),
@@ -6732,7 +6732,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
   'use strict';
   document.documentElement.classList.add('mp');
 
-  const TEAMS = [{ name: 'Gate', css: '#ffb347' }, { name: 'Quay', css: '#5fd3dc' }];
+  const TEAMS = [{ name: 'Red', css: '#ff4b3e' }, { name: 'Blue', css: '#3f8cff' }];
   const MODES = { dm: { name: 'Deathmatch', room: 'saltline-dm' }, tdm: { name: 'Team play', room: 'saltline-tdm' } };
   const PALETTE = ['#ff6b5e', '#ff9f43', '#ffd75e', '#9fd66b', '#4fd1a5', '#5fd3dc', '#6fa8ff', '#b08cff', '#ff7fc8', '#e8e4da'];
   const SHADES = ['Red', 'Orange', 'Yellow', 'Green', 'Mint', 'Cyan', 'Blue', 'Violet', 'Pink', 'Bone'];
@@ -6915,10 +6915,10 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
         </article>
         <article class="mp-card" data-mode="tdm" aria-labelledby="mp-h-tdm">
           <div class="mp-card-h"><h2 id="mp-h-tdm">Team play</h2><span class="mp-count" data-mp-f="tdm-count">0 playing</span></div>
-          <p class="mp-desc">Gate holds the west yard, Quay holds the waterfront. Friendly fire is off.</p>
+          <p class="mp-desc">Red against Blue. Friendly fire is off.</p>
           <div class="mp-teams">
-            <div class="mp-team" data-team="0"><div class="mp-team-h"><b>Gate</b><span data-mp-f="t0-score">0</span></div><ul class="mp-roster" data-mp-f="t0-roster"></ul><button class="btn" data-mp="join-t0" disabled>Join Gate</button></div>
-            <div class="mp-team" data-team="1"><div class="mp-team-h"><b>Quay</b><span data-mp-f="t1-score">0</span></div><ul class="mp-roster" data-mp-f="t1-roster"></ul><button class="btn" data-mp="join-t1" disabled>Join Quay</button></div>
+            <div class="mp-team" data-team="0"><div class="mp-team-h"><b>Red</b><span data-mp-f="t0-score">0</span></div><ul class="mp-roster" data-mp-f="t0-roster"></ul><button class="btn" data-mp="join-t0" disabled>Join Red</button></div>
+            <div class="mp-team" data-team="1"><div class="mp-team-h"><b>Blue</b><span data-mp-f="t1-score">0</span></div><ul class="mp-roster" data-mp-f="t1-roster"></ul><button class="btn" data-mp="join-t1" disabled>Join Blue</button></div>
           </div>
         </article>
       </div>
@@ -7361,7 +7361,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       // the helmet takes the player's colour; in team play the uniform leans toward the team colour
       const head = new T.Color(1.5, 1.5, 1.5), body = mp.mode === 'tdm' && (R.tm === 0 || R.tm === 1) ? tintOf(css, .55, 1.9) : new T.Color(1.55, 1.55, 1.55);
       for (const m of R.av.mats) m.m.color.copy(m.head ? head : body);
-      R.av.setHelmet(own); // the helmet itself is repainted in the player's colour
+      R.av.setHelmet(css); // the helmet itself is repainted: the team's colour in Team deathmatch, the player's own otherwise
       const em = glow(hexOf(css), 3.5); for (const m of R.av.marks) m.material = em;
       R.nm.textContent = name; R.nm.style.borderBottomColor = css; R.bar.style.background = css;
       R.tag.classList.toggle('ally', mp.mode === 'tdm' && R.tm === mp.team);
@@ -7823,7 +7823,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     function hudText() {
       if (!mp.live) return;
       const s = S();
-      if (mp.mode === 'tdm') { const t = teamTotals(); mp.obj = 'Team play · ' + TEAMS[mp.team].name; mp.tally = `${inBreak() ? 'Next round ' + clock(breakLeft()) : clock(roundLeft())} · Gate ${t[0]} · Quay ${t[1]}`; }
+      if (mp.mode === 'tdm') { const t = teamTotals(); mp.obj = 'Team play · ' + TEAMS[mp.team].name; mp.tally = `${inBreak() ? 'Next round ' + clock(breakLeft()) : clock(roundLeft())} · Red ${t[0]} · Blue ${t[1]}`; }
       else { mp.obj = 'Deathmatch'; mp.tally = `${inBreak() ? 'Next round ' + clock(breakLeft()) : clock(roundLeft())} · ${s.kills} ${s.kills === 1 ? 'kill' : 'kills'} · ${s.deaths} down`; }
       _setObjective(mp.obj); _setTally(mp.tally);
     }

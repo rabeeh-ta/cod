@@ -215,6 +215,19 @@ export function applyGunHooks(html) {
   swap(`mp.tally = \`\${clock(roundLeft())} · \${s.kills}`, `mp.tally = \`\${inBreak() ? 'Next round ' + clock(breakLeft()) : clock(roundLeft())} · \${s.kills}`, 'the countdown in deathmatch');
   swap(`const t = 'Round ends in ' + clock(roundLeft());`, `const t = inBreak() ? 'Next round in ' + clock(breakLeft()) : 'Round ends in ' + clock(roundLeft());`, 'the countdown in the lobby');
 
+  // 16. the teams are Red and Blue (they were Gate and Quay, amber and sea green), and in Team deathmatch a player's helmet
+  //     is their team's colour, as their plate and lights already were. Team numbers on the wire are unchanged: 0 is Red, 1 Blue.
+  //     The same two colours are in web/net.js (TEAMS), for the menus.
+  swap(`const TEAMS = [{ name: 'Gate', css: '#ffb347' }, { name: 'Quay', css: '#5fd3dc' }];`, `const TEAMS = [{ name: 'Red', css: '#ff4b3e' }, { name: 'Blue', css: '#3f8cff' }];`, 'the teams');
+  swap(`:root { --gate: #ffb347; --quay: #5fd3dc; }`, `:root { --gate: #ff4b3e; --quay: #3f8cff; }`, 'the team colours in the styles of the game');
+  swap(`clock(roundLeft())} · Gate \${t[0]} · Quay \${t[1]}\``, `clock(roundLeft())} · Red \${t[0]} · Blue \${t[1]}\``, 'the team scores in the tally');
+  swap(`<p class="mp-desc">Gate holds the west yard, Quay holds the waterfront. Friendly fire is off.</p>`, `<p class="mp-desc">Red against Blue. Friendly fire is off.</p>`, 'the teams in the old lobby of the game');
+  swap(`<b>Gate</b><span data-mp-f="t0-score">`, `<b>Red</b><span data-mp-f="t0-score">`, 'the name of the first team in the old lobby');
+  swap(`<b>Quay</b><span data-mp-f="t1-score">`, `<b>Blue</b><span data-mp-f="t1-score">`, 'the name of the second team in the old lobby');
+  swap(`data-mp="join-t0" disabled>Join Gate</button>`, `data-mp="join-t0" disabled>Join Red</button>`, 'joining the first team in the old lobby');
+  swap(`data-mp="join-t1" disabled>Join Quay</button>`, `data-mp="join-t1" disabled>Join Blue</button>`, 'joining the second team in the old lobby');
+  swap(`R.av.setHelmet(own); // the helmet itself is repainted in the player's colour`, `R.av.setHelmet(css); // the helmet itself is repainted: the team's colour in Team deathmatch, the player's own otherwise`, 'the helmet in the team colour');
+
   return html;
 }
 

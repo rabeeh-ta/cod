@@ -9,7 +9,7 @@
                     peer to peer, signalled through the room's Durable Object, STUN/TURN from Cloudflare)
      tts         -> speechSynthesis, reads typed radio messages aloud
      db          -> not provided (the original only used it for connection diagnostics)
-   It also owns the first screen (Deathmatch quick play · Room · Solo) and the room badge.
+   It also owns the front end around the matches: home, quick play, private match and the room lobby.
    Loaded as a plain <script> right before the multiplayer layer, so window.claude exists when that layer starts. */
 (() => {
   'use strict';
@@ -445,63 +445,200 @@
     },
   };
 
-  /* ------------------------------------------------------------------ first screen, room badge, voice panel */
+  /* ------------------------------------------------------------------ front end (home, quick play, private match, room lobby), voice panel */
   const ui = (() => {
     const css = document.createElement('style');
     css.textContent = `
-      .net-gate { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; overflow-y: auto;
-        padding: max(28px, env(safe-area-inset-top)) var(--gr, 16px) max(28px, env(safe-area-inset-bottom)) max(var(--gl, 16px), 6vw);
-        background: linear-gradient(90deg, rgba(11,13,15,.96) 0%, rgba(11,13,15,.88) 38%, rgba(11,13,15,.45) 72%, rgba(11,13,15,.2) 100%);
+      /* ---- the front end: home, quick play, private match and the room lobby, before and between matches.
+         The game's own look: bone on near-black, the amber signal, condensed display type, square corners. ---- */
+      .net-gate { position: fixed; inset: 0; z-index: 1000; display: grid; grid-template-rows: auto minmax(min-content, 1fr) auto; overflow-y: auto; overscroll-behavior: contain;
+        padding: max(18px, env(safe-area-inset-top)) max(var(--gr, 16px), 4vw) max(18px, env(safe-area-inset-bottom)) max(var(--gl, 16px), 5vw);
+        background: linear-gradient(90deg, rgba(11,13,15,.95) 0%, rgba(11,13,15,.86) 40%, rgba(11,13,15,.5) 74%, rgba(11,13,15,.28) 100%);
         color: var(--bone, #e8e4da); font-family: var(--f-label, 'Barlow Condensed', sans-serif); -webkit-user-select: none; user-select: none; }
       .net-gate[hidden] { display: none; }
-      .net-card { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 22px; }
-      .net-eyebrow { display: flex; gap: 10px; align-items: center; font: 500 12px/1 var(--f-mono, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--bone-dim, rgba(232,228,218,.64)); }
-      .net-eyebrow .tag { padding: 4px 6px; background: var(--signal, #ffb347); color: var(--ink, #0b0d0f); }
-      .net-word { margin: -6px 0 -4px; font: 900 clamp(64px, 15vw, 112px)/.84 var(--f-display, Impact, sans-serif); letter-spacing: .01em; }
-      .net-name { display: flex; flex-direction: column; gap: 8px; }
-      .net-name span, .net-k { font: 500 11px/1 var(--f-mono, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--bone-dim, rgba(232,228,218,.64)); }
-      .net-in { background: rgba(232,228,218,.05); border: 1px solid var(--line, rgba(232,228,218,.2)); border-radius: 2px; color: var(--bone, #e8e4da);
-        font: 500 20px/1 var(--f-label, sans-serif); padding: 12px 14px; -webkit-user-select: text; user-select: text; min-width: 0; }
-      .net-in::placeholder { color: var(--bone-faint, rgba(232,228,218,.24)); }
-      .net-in:focus { outline: none; border-color: var(--signal, #ffb347); }
-      .net-modes { display: flex; flex-direction: column; border-top: 1px solid var(--line, rgba(232,228,218,.2)); }
-      .net-mode { appearance: none; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 16px; width: 100%; text-align: left;
-        background: transparent; border: 0; border-bottom: 1px solid var(--line, rgba(232,228,218,.2)); color: inherit; padding: 16px 4px; cursor: pointer; transition: padding .18s ease, background .18s ease; }
-      .net-mode b { font: 700 32px/1 var(--f-display, Impact, sans-serif); letter-spacing: .02em; text-transform: uppercase; }
-      .net-mode span { grid-column: 1; font-size: 17px; line-height: 1.3; color: var(--bone-dim, rgba(232,228,218,.64)); }
-      .net-mode i { grid-column: 2; grid-row: 1 / span 2; font: 500 22px/1 var(--f-mono, monospace); font-style: normal; color: var(--bone-faint, rgba(232,228,218,.24)); transition: color .18s ease, transform .18s ease; }
-      .net-mode:hover:not(:disabled), .net-mode:focus-visible { padding-left: 12px; background: linear-gradient(90deg, rgba(255,179,71,.1), transparent 70%); outline: none; }
-      .net-mode:hover:not(:disabled) i, .net-mode:focus-visible i, .net-mode[aria-expanded="true"] i { color: var(--signal, #ffb347); }
-      .net-mode[aria-expanded="true"] i { transform: rotate(45deg); }
-      .net-mode.lead b { color: var(--signal, #ffb347); }
-      .net-mode:disabled { cursor: default; opacity: .55; }
-      .net-room { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 4px 4px 18px; border-bottom: 1px solid var(--line, rgba(232,228,218,.2)); }
-      .net-room[hidden] { display: none; }
-      .net-row { display: flex; gap: 8px; }
-      .net-code { flex: 1; font-family: var(--f-mono, monospace); letter-spacing: .3em; text-transform: uppercase; }
-      .net-btn { appearance: none; border: 1px solid var(--line, rgba(232,228,218,.2)); background: transparent; color: var(--bone, #e8e4da); border-radius: 2px;
-        font: 600 16px/1 var(--f-label, sans-serif); letter-spacing: .08em; text-transform: uppercase; padding: 13px 18px; cursor: pointer; white-space: nowrap; }
-      .net-btn:hover:not(:disabled) { border-color: var(--bone-dim, rgba(232,228,218,.64)); }
-      .net-btn.primary { background: var(--signal, #ffb347); border-color: var(--signal, #ffb347); color: var(--ink, #0b0d0f); }
-      .net-btn.primary:hover:not(:disabled) { background: var(--signal-hot, #ffc977); }
-      .net-btn:disabled { opacity: .5; cursor: default; }
-      .net-btn:focus-visible { outline: 2px solid var(--signal, #ffb347); outline-offset: 2px; }
-      .net-status { min-height: 20px; margin: -8px 0 0; font-size: 16px; color: var(--bone-dim, rgba(232,228,218,.64)); }
-      .net-status.err { color: var(--alarm, #ff5a40); }
-      .net-status.busy::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 10px; border-radius: 50%; background: var(--signal, #ffb347); animation: net-pulse 1s ease-in-out infinite; }
+      .net-gate button { font-family: inherit; }
       @keyframes net-pulse { 50% { opacity: .25; } }
-      @media (max-width: 640px) { .net-gate { background: rgba(11,13,15,.9); align-items: flex-start; } .net-mode b { font-size: 28px; } }
 
-      .net-badge { position: fixed; z-index: 900; top: max(14px, env(safe-area-inset-top)); right: var(--gr, 16px); display: flex; align-items: center; gap: 10px;
-        padding: 8px 8px 8px 12px; background: var(--plate-solid, rgba(11,13,15,.9)); border: 1px solid var(--line, rgba(232,228,218,.2)); border-radius: 2px;
-        color: var(--bone, #e8e4da); font: 500 12px/1 var(--f-mono, monospace); letter-spacing: .1em; text-transform: uppercase; }
-      .net-badge[hidden] { display: none; }
-      .net-badge b { font-weight: 500; color: var(--signal, #ffb347); letter-spacing: .2em; }
-      .net-badge .dim { color: var(--bone-dim, rgba(232,228,218,.64)); }
-      .net-badge button { appearance: none; background: transparent; border: 1px solid var(--line, rgba(232,228,218,.2)); border-radius: 2px; color: var(--bone, #e8e4da);
-        font: inherit; letter-spacing: .08em; padding: 7px 9px; cursor: pointer; }
-      .net-badge button:hover { border-color: var(--bone-dim, rgba(232,228,218,.64)); }
-      @media (max-width: 520px) { .net-badge .dim { display: none; } }
+      /* top bar: the mark and where you are on the left, who you are on the right */
+      .fe-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; }
+      .fe-brand { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+      .fe-mark { font: 900 26px/1 var(--f-display, Impact, sans-serif); letter-spacing: .02em; }
+      .fe-crumb { font: 500 12px/1 var(--f-mono, monospace); letter-spacing: .16em; text-transform: uppercase; color: var(--bone-dim, rgba(232,228,218,.64)); white-space: nowrap; }
+      .fe-crumb:not(:empty)::before { content: '/'; margin-right: 14px; color: var(--bone-faint, rgba(232,228,218,.3)); }
+      .fe-me { display: flex; align-items: center; gap: 18px; }
+      .fe-online { font: 500 11px/1 var(--f-mono, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--bone-dim, rgba(232,228,218,.64)); white-space: nowrap; }
+      .fe-online:empty { display: none; }
+      .net-live { display: inline-flex; align-items: center; gap: 8px; color: var(--bone, #e8e4da); }
+      .net-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--signal, #ffb347); animation: net-pulse 2.4s ease-in-out infinite; }
+      .fe-name { display: flex; align-items: center; border: 1px solid var(--line, rgba(232,228,218,.2)); background: rgba(11,13,15,.6); border-radius: 2px; transition: border-color .18s ease; }
+      .fe-name:hover { border-color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-name:focus-within { border-color: var(--signal, #ffb347); }
+      .fe-name span { padding: 0 0 0 12px; font: 500 10px/1 var(--f-mono, monospace); letter-spacing: .16em; text-transform: uppercase; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-name input { width: 150px; min-width: 0; background: transparent; border: 0; outline: none; color: var(--bone, #e8e4da); font: 600 17px/1 var(--f-label, sans-serif); letter-spacing: .04em;
+        padding: 11px 12px; -webkit-user-select: text; user-select: text; }
+      .fe-name input::placeholder { color: var(--bone-faint, rgba(232,228,218,.3)); }
+
+      .fe-body { align-self: center; padding: 28px 0 24px; min-width: 0; }
+      .fe-screen[hidden] { display: none !important; }
+      .fe-split { display: grid; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); gap: clamp(28px, 4.5vw, 72px); align-items: start; }
+      .fe-col { display: flex; flex-direction: column; min-width: 0; }
+      .fe-h { margin: 0 0 6px; font: 900 clamp(42px, 4.4vw, 64px)/.9 var(--f-display, Impact, sans-serif); letter-spacing: .01em; text-transform: uppercase; white-space: nowrap; }
+      .fe-k { margin: 22px 0 10px; font: 500 11px/1 var(--f-mono, monospace); letter-spacing: .16em; text-transform: uppercase; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-col > .fe-k:first-child { margin-top: 0; }
+
+      /* home: the mark, then the three ways in */
+      .fe-home { max-width: 560px; }
+      .fe-eyebrow { display: flex; gap: 10px; align-items: center; font: 500 12px/1 var(--f-mono, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-eyebrow .tag { padding: 4px 6px; background: var(--signal, #ffb347); color: var(--ink, #0b0d0f); }
+      .fe-word { margin: 14px 0 30px; font: 900 clamp(72px, 11vw, 148px)/.82 var(--f-display, Impact, sans-serif); letter-spacing: .01em; }
+      .fe-menu { display: flex; flex-direction: column; border-top: 1px solid var(--line, rgba(232,228,218,.2)); }
+      .fe-item { position: relative; appearance: none; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 16px; width: 100%; text-align: left; color: inherit;
+        background: transparent; border: 0; border-bottom: 1px solid var(--line, rgba(232,228,218,.2)); padding: 18px 8px 18px 20px; cursor: pointer;
+        transition: background .18s ease, padding .18s ease; }
+      .fe-item::before { content: ''; position: absolute; left: 0; top: -1px; bottom: -1px; width: 3px; background: var(--signal, #ffb347); transform: scaleY(0); transform-origin: 50% 50%; transition: transform .18s ease; }
+      .fe-item b { font: 700 38px/1 var(--f-display, Impact, sans-serif); letter-spacing: .02em; text-transform: uppercase; transition: color .18s ease; }
+      .fe-item span { grid-column: 1; font-size: 17px; line-height: 1.3; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-item em { grid-column: 1; margin-top: 4px; font: 500 11px/1.2 var(--f-mono, monospace); font-style: normal; letter-spacing: .12em; text-transform: uppercase; color: var(--signal, #ffb347); }
+      .fe-item em:empty { display: none; }
+      .fe-item i { grid-column: 2; grid-row: 1 / span 3; font: 500 24px/1 var(--f-mono, monospace); font-style: normal; color: var(--bone-faint, rgba(232,228,218,.3)); transition: color .18s ease, transform .18s ease; }
+      .fe-item:hover:not(:disabled), .fe-item:focus-visible { padding-left: 28px; background: linear-gradient(90deg, rgba(255,179,71,.12), rgba(255,179,71,0) 70%); outline: none; }
+      .fe-item:hover:not(:disabled)::before, .fe-item:focus-visible::before { transform: scaleY(1); }
+      .fe-item:hover:not(:disabled) b, .fe-item:focus-visible b { color: var(--signal, #ffb347); }
+      .fe-item:hover:not(:disabled) i, .fe-item:focus-visible i { color: var(--signal, #ffb347); transform: translateX(4px); }
+      .fe-item:active:not(:disabled) { background: linear-gradient(90deg, rgba(255,179,71,.2), rgba(255,179,71,0) 70%); }
+      .fe-item:disabled { cursor: default; opacity: .5; }
+
+      /* a mode: one row of a single choice */
+      .fe-modes { display: grid; gap: 8px; }
+      .fe-mode { position: relative; appearance: none; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 3px 12px; width: 100%; text-align: left; color: inherit;
+        background: rgba(11,13,15,.6); border: 1px solid var(--line, rgba(232,228,218,.2)); border-radius: 2px; padding: 14px 16px; cursor: pointer;
+        transition: border-color .18s ease, background .18s ease, box-shadow .18s ease; }
+      .fe-mode b { font: 700 24px/1 var(--f-display, Impact, sans-serif); letter-spacing: .03em; text-transform: uppercase; transition: color .18s ease; }
+      .fe-mode span { grid-column: 1; font-size: 15px; line-height: 1.3; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-mode em { grid-column: 2; grid-row: 1; font: 500 11px/1 var(--f-mono, monospace); font-style: normal; letter-spacing: .12em; text-transform: uppercase; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-mode em.live { color: var(--signal, #ffb347); }
+      .fe-mode:hover:not(:disabled) { border-color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-mode:active:not(:disabled) { background: rgba(34,27,16,.9); }
+      .fe-mode:focus-visible { outline: 2px solid var(--signal, #ffb347); outline-offset: 2px; }
+      .fe-mode[aria-pressed="true"] { border-color: var(--signal, #ffb347); background: rgba(34,27,16,.86); box-shadow: inset 3px 0 0 var(--signal, #ffb347); }
+      .fe-mode[aria-pressed="true"] b { color: var(--signal, #ffb347); }
+      .fe-mode:disabled { cursor: default; opacity: .5; }
+
+      /* a map: its picture from above, the name on a dark fade at the bottom */
+      .fe-maps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+      .fe-maps.one { grid-template-columns: minmax(0, 520px); }
+      .fe-map { position: relative; appearance: none; display: block; width: 100%; aspect-ratio: 16 / 9; padding: 0; overflow: hidden; cursor: pointer; text-align: left; color: var(--bone, #e8e4da);
+        background: #15181b; border: 1px solid var(--line, rgba(232,228,218,.2)); border-radius: 2px; transition: border-color .18s ease; }
+      .fe-map img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .45s cubic-bezier(.2, .7, .2, 1), filter .18s ease; filter: saturate(.9) brightness(.92); }
+      .fe-map::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(5,6,7,.94) 0%, rgba(5,6,7,.62) 34%, rgba(5,6,7,0) 66%); pointer-events: none; }
+      .fe-map::before { content: ''; position: absolute; inset: 0; z-index: 2; box-shadow: inset 0 0 0 2px var(--signal, #ffb347); opacity: 0; transition: opacity .18s ease; pointer-events: none; }
+      .fe-map-t { position: absolute; left: 14px; right: 14px; bottom: 12px; z-index: 1; display: grid; gap: 5px; }
+      .fe-map-t b { font: 700 clamp(17px, 1.6vw, 24px)/1 var(--f-display, Impact, sans-serif); letter-spacing: .03em; text-transform: uppercase; }
+      .fe-map-t small { font-size: 13px; line-height: 1.25; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-map-tag { position: absolute; left: 10px; top: 10px; z-index: 1; padding: 4px 6px; background: var(--signal, #ffb347); color: var(--ink, #0b0d0f); font: 500 10px/1 var(--f-mono, monospace); letter-spacing: .14em; text-transform: uppercase; opacity: 0; transform: translateY(-3px); transition: opacity .18s ease, transform .18s ease; }
+      .fe-map:hover:not(:disabled) { border-color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-map:hover:not(:disabled) img { transform: scale(1.045); filter: saturate(1) brightness(1); }
+      .fe-map:active:not(:disabled) img { transform: scale(1.02); }
+      .fe-map:focus-visible { outline: 2px solid var(--signal, #ffb347); outline-offset: 2px; }
+      .fe-map[aria-pressed="true"] { border-color: var(--signal, #ffb347); }
+      .fe-map[aria-pressed="true"]::before, .fe-map[aria-pressed="true"] .fe-map-tag { opacity: 1; transform: none; }
+      .fe-map[aria-pressed="true"] img { filter: saturate(1) brightness(1); }
+      .fe-map[aria-pressed="true"] .fe-map-t b { color: var(--signal, #ffb347); }
+      .fe-map:disabled { cursor: default; }
+      .fe-maps.one .fe-map { cursor: default; } .fe-maps.one .fe-map img { transform: none; }
+
+      /* the one big action of a screen, and the smaller ones */
+      .fe-go { margin-top: 22px; display: grid; gap: 12px; }
+      .fe-cta { appearance: none; display: grid; gap: 7px; width: 100%; text-align: left; padding: 18px 22px 17px; cursor: pointer; border: 0; border-radius: 2px;
+        background: var(--signal, #ffb347); color: var(--ink, #0b0d0f); transition: background .15s ease, transform .1s ease; }
+      .fe-cta > span { font: 900 32px/.9 var(--f-display, Impact, sans-serif); letter-spacing: .03em; text-transform: uppercase; }
+      .fe-cta small { font: 500 11px/1.2 var(--f-mono, monospace); letter-spacing: .12em; text-transform: uppercase; opacity: .72; }
+      .fe-cta small:empty { display: none; }
+      .fe-cta:hover:not(:disabled) { background: var(--signal-hot, #ffc977); }
+      .fe-cta:active:not(:disabled) { transform: translateY(1px); }
+      .fe-cta:focus-visible { outline: 2px solid var(--bone, #e8e4da); outline-offset: 3px; }
+      .fe-cta:disabled { cursor: default; opacity: .55; }
+      .fe-btn { appearance: none; border: 1px solid var(--line, rgba(232,228,218,.2)); background: rgba(11,13,15,.6); color: var(--bone, #e8e4da); border-radius: 2px;
+        font: 600 14px/1 var(--f-label, sans-serif); letter-spacing: .1em; text-transform: uppercase; padding: 12px 15px; cursor: pointer; white-space: nowrap;
+        transition: border-color .15s ease, background .15s ease, color .15s ease; }
+      .fe-btn:hover:not(:disabled) { border-color: var(--bone-dim, rgba(232,228,218,.64)); background: rgba(11,13,15,.82); }
+      .fe-btn:active:not(:disabled) { color: var(--signal, #ffb347); border-color: var(--signal, #ffb347); }
+      .fe-btn:focus-visible { outline: 2px solid var(--signal, #ffb347); outline-offset: 2px; }
+      .fe-btn:disabled { cursor: default; opacity: .5; }
+      .fe-status { min-height: 20px; margin: 0; font-size: 16px; line-height: 1.3; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-status.err { color: var(--alarm, #ff5a40); }
+      .fe-status.busy::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 10px; border-radius: 50%; background: var(--signal, #ffb347); animation: net-pulse 1s ease-in-out infinite; }
+
+      /* private match: join with a code */
+      .fe-join { display: flex; gap: 8px; }
+      .fe-code-in { flex: 1; min-width: 0; background: rgba(11,13,15,.6); border: 1px solid var(--line, rgba(232,228,218,.2)); border-radius: 2px; color: var(--bone, #e8e4da);
+        font: 500 20px/1 var(--f-mono, monospace); letter-spacing: .3em; text-transform: uppercase; padding: 11px 14px; -webkit-user-select: text; user-select: text; }
+      .fe-code-in::placeholder { color: var(--bone-faint, rgba(232,228,218,.3)); }
+      .fe-code-in:hover { border-color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-code-in:focus { outline: none; border-color: var(--signal, #ffb347); }
+      .fe-or { display: flex; align-items: center; gap: 12px; margin: 30px 0 12px; font: 500 11px/1 var(--f-mono, monospace); letter-spacing: .16em; text-transform: uppercase; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-or::after { content: ''; flex: 1; height: 1px; background: var(--line, rgba(232,228,218,.2)); }
+
+      /* the room lobby */
+      .fe-room-h { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+      .fe-code { display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 44px; border: 1px solid var(--line, rgba(232,228,218,.2)); background: rgba(11,13,15,.6); border-radius: 2px; }
+      .fe-code span { font: 500 10px/1 var(--f-mono, monospace); letter-spacing: .16em; text-transform: uppercase; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-code b { font: 500 22px/1 var(--f-mono, monospace); letter-spacing: .28em; color: var(--signal, #ffb347); }
+      .fe-code em { font: 500 11px/1 var(--f-mono, monospace); font-style: normal; letter-spacing: .1em; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-teams { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .fe-teams.ffa { grid-template-columns: minmax(0, 1fr); }
+      .fe-team { display: flex; flex-direction: column; border: 1px solid var(--line, rgba(232,228,218,.2)); background: rgba(11,13,15,.6); border-radius: 2px; min-width: 0; }
+      .fe-team-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--line, rgba(232,228,218,.2)); }
+      .fe-team-h b { font: 700 22px/1 var(--f-display, Impact, sans-serif); letter-spacing: .04em; text-transform: uppercase; }
+      .fe-team-h span { font: 500 11px/1 var(--f-mono, monospace); letter-spacing: .1em; text-transform: uppercase; color: var(--bone-dim, rgba(232,228,218,.64)); white-space: nowrap; }
+      .fe-team ul { list-style: none; margin: 0; padding: 6px 0; flex: 1; min-height: 48px; }
+      .fe-team li { display: flex; align-items: center; gap: 9px; padding: 6px 14px; font-size: 16px; line-height: 1.2; }
+      .fe-team li i { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-team li .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .fe-team li .you { font: 500 10px/1 var(--f-mono, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--signal, #ffb347); }
+      .fe-team li .sc { font: 500 12px/1 var(--f-mono, monospace); color: var(--bone-dim, rgba(232,228,218,.64)); font-variant-numeric: tabular-nums; }
+      .fe-team li.empty { color: var(--bone-faint, rgba(232,228,218,.3)); font-size: 15px; }
+      .fe-team .fe-btn { margin: 0 10px 10px; }
+      .fe-team .fe-join-team { margin: 0 10px 10px; appearance: none; border: 0; border-radius: 2px; padding: 14px 16px 13px; cursor: pointer; text-align: center;
+        background: var(--team, #e8e4da); color: #0b0d0f; font: 900 22px/1 var(--f-display, Impact, sans-serif); letter-spacing: .04em; text-transform: uppercase;
+        transition: filter .15s ease, transform .1s ease; }
+      .fe-team .fe-join-team:hover:not(:disabled) { filter: brightness(1.12); }
+      .fe-team .fe-join-team:active:not(:disabled) { transform: translateY(1px); }
+      .fe-team .fe-join-team:focus-visible { outline: 2px solid var(--bone, #e8e4da); outline-offset: 3px; }
+      .fe-team .fe-join-team:disabled { cursor: default; opacity: .45; }
+      .fe-team.mine { border-color: var(--team, #e8e4da); }
+      .fe-lead { margin: 10px 0 0; font-size: 17px; line-height: 1.35; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-team-wide { max-width: 560px; }
+      .fe-idle { margin: 12px 0 0; font-size: 15px; line-height: 1.35; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-idle:empty { display: none; }
+      .fe-idle b { font-weight: 600; color: var(--bone, #e8e4da); }
+      .fe-note { margin: 8px 0 0; font-size: 14px; color: var(--bone-dim, rgba(232,228,218,.64)); text-shadow: var(--shadow); }
+
+      /* bottom bar: back (Esc) or leave on the left; fullscreen sits fixed at the right */
+      .fe-foot { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+      .fe-foot kbd { display: inline-block; margin-right: 8px; padding: 3px 5px; border: 1px solid var(--line, rgba(232,228,218,.2)); border-radius: 2px; font: 500 10px/1 var(--f-mono, monospace); letter-spacing: .08em; color: var(--bone-dim, rgba(232,228,218,.64)); }
+      .fe-foot [hidden] { display: none; }
+
+      @media (max-width: 1000px) {
+        .fe-split { grid-template-columns: minmax(0, 1fr); }
+        .fe-split > .fe-col { max-width: 620px; }
+        .net-gate { background: rgba(11,13,15,.88); }
+      }
+      @media (max-width: 640px) {
+        .fe-me .fe-online { display: none; }
+        .fe-crumb { display: none; }
+        .fe-name input { width: 110px; }
+        .fe-item b { font-size: 30px; }
+        .fe-maps { grid-template-columns: minmax(0, 1fr); }
+        .fe-teams { grid-template-columns: minmax(0, 1fr); }
+        .fe-foot { padding-right: 60px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .fe-item, .fe-item::before, .fe-item b, .fe-item i, .fe-mode, .fe-map, .fe-map img, .fe-map::before, .fe-map-tag, .fe-cta, .fe-btn, .fe-name, .fe-team .fe-join-team { transition: none; }
+        .fe-map:hover:not(:disabled) img, .fe-map:active:not(:disabled) img { transform: none; }
+        .fe-item:hover:not(:disabled) i, .fe-item:focus-visible i { transform: none; }
+        .net-live i, .fe-status.busy::before { animation: none; }
+      }
 
       .net-talk { position: fixed; z-index: 800; left: var(--gl, 16px); top: calc(max(14px, env(safe-area-inset-top)) + 84px); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
       .net-talk div { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 8px; background: var(--plate, rgba(11,13,15,.6)); border-left: 2px solid var(--signal, #ffb347);
@@ -514,22 +651,6 @@
       .net-online[hidden] { display: none; }
       .net-online i { width: 6px; height: 6px; border-radius: 50%; background: var(--signal, #ffb347); animation: net-pulse 2.4s ease-in-out infinite; }
       .net-online b { font-weight: 600; color: var(--bone, #e8e4da); }
-
-      /* live numbers on the first screen */
-      .net-live { display: inline-flex; align-items: center; gap: 8px; color: var(--bone, #e8e4da); }
-      .net-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--signal, #ffb347); animation: net-pulse 2.4s ease-in-out infinite; }
-      .net-mode em { grid-column: 1; margin-top: 4px; font: 500 11px/1.2 var(--f-mono, monospace); font-style: normal; letter-spacing: .12em; text-transform: uppercase; color: var(--signal, #ffb347); }
-      .net-mode em:empty { display: none; }
-      /* map: the game's own segmented control, as on its settings panel */
-      .net-map { display: grid; gap: 8px; margin-top: 16px; }
-      /* the guns: beside the menu where there is room, under it where there is not */
-      .net-guns { display: grid; gap: 12px; width: min(980px, 54vw); margin-left: auto; padding-left: 28px; margin-right: max(0px, 2vw); }
-      .net-guns[hidden] { display: none; }
-      @media (max-width: 1100px) { .net-gate { flex-wrap: wrap; align-content: center; gap: 22px; } .net-guns { width: 100%; max-width: 460px; margin: 0; } }
-      .net-map[hidden] { display: none; }
-      .net-map .seg button { min-height: 36px; font-size: 12px; background: rgba(11, 13, 15, .45); }
-      .net-map .seg button[aria-pressed="true"] { background: var(--bone, #e8e4da); }
-      .net-map .seg button:disabled { opacity: .6; cursor: default; }
 
       /* while the first screen is up, only the 3D scene shows behind it */
       html.net-gate-open #ui, html.net-gate-open #boot { visibility: hidden; }
@@ -544,8 +665,8 @@
       .net-load .boot-bar { width: min(240px, 40vw); }
       html.net-scene .net-load { opacity: 0; }
       @media (max-width: 900px) { .net-load { display: none; } }
-      /* fullscreen, bottom right of the first screen (the loading line sits above it until the scene is up) */
-      .net-fs { position: fixed; right: max(var(--gr, 16px), 6vw); bottom: max(28px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px;
+      /* fullscreen, bottom right of the front end and of the pause screen (the loading line sits above it until the scene is up) */
+      .net-fs { position: fixed; z-index: 1001; right: max(var(--gr, 16px), 4vw); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 2px); display: flex; align-items: center; gap: 10px;
         appearance: none; background: rgba(11,13,15,.6); border: 1px solid var(--line, rgba(232,228,218,.2)); border-radius: 2px; color: var(--bone, #e8e4da);
         font: 600 14px/1 var(--f-label, sans-serif); letter-spacing: .12em; text-transform: uppercase; padding: 11px 14px; cursor: pointer;
         transition: border-color .18s ease, background .18s ease, color .18s ease; }
@@ -556,7 +677,7 @@
       .net-fs:focus-visible { outline: 2px solid var(--signal, #ffb347); outline-offset: 2px; }
       .net-fs .exit { display: none; } .net-fs.on .exit { display: block; } .net-fs.on .enter { display: none; }
       .net-load { bottom: calc(max(28px, env(safe-area-inset-bottom)) + 58px); }
-      @media (max-width: 640px) { .net-fs { right: var(--gr, 16px); bottom: max(16px, env(safe-area-inset-bottom)); } }
+      @media (max-width: 640px) { .net-fs { right: var(--gr, 16px); bottom: max(18px, env(safe-area-inset-bottom)); padding: 11px; } .net-fs span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
       @media (prefers-reduced-motion: reduce) { .net-fs { transition: none; } }
       @media (prefers-reduced-motion: reduce) { #view, .net-load { transition: none; } }
       /* quick play has no room lobby: the first screen is home, so the game's title screen must never paint, not even for a frame */
@@ -566,49 +687,124 @@
     `;
     document.head.appendChild(css);
 
+    /* The front end, shaped like a console shooter's: a home screen with the ways in, then a screen for each.
+         home     Quick play · Private match · Solo mission
+         quick    mode (Team deathmatch or Deathmatch), map, gun, then Find match: an open public match on that map, in that mode
+         team     after Find match in Team deathmatch: who is on Red and on Blue, and the player picks a side
+         private  create a room (mode and map) or join one with a code
+         room     the room's lobby: its code to share, its map, a mode, who is on which team (Join Red / Join Blue), your gun
+       Leaving a match brings back the screen it was started from. */
     const gate = document.createElement('div');
     gate.className = 'net-gate'; gate.hidden = true;
     gate.innerHTML = `
-      <div class="net-card">
-        <div class="net-eyebrow"><span class="tag">B4</span><span data-net-stat="online">Up to 10 players a match</span></div>
-        <h1 class="net-word">SALTLINE</h1>
-        <label class="net-name"><span>Your name</span><input class="net-in" data-net="name" maxlength="16" placeholder="Breacher" autocomplete="off" spellcheck="false"></label>
-        <div class="net-map" hidden><span class="net-k" id="net-map-l">Map</span><div class="seg" role="group" aria-labelledby="net-map-l"></div></div>
-        <div class="net-modes">
-          <button type="button" class="net-mode lead" data-net="dm"><b>Deathmatch</b><span>Jump into an open match. Everyone for themselves.</span><em data-net-stat="dm"></em><i>&rarr;</i></button>
-          <button type="button" class="net-mode" data-net="room" aria-expanded="false"><b>Room</b><span>Play with friends. Make a room and share the code.</span><em data-net-stat="rooms"></em><i>+</i></button>
-          <form class="net-room" hidden novalidate>
-            <button type="button" class="net-btn primary" data-net="create">Create a room</button>
-            <div class="net-k">or join with a code</div>
-            <div class="net-row">
-              <input class="net-in net-code" data-net="code" maxlength="6" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
-              <button type="submit" class="net-btn">Join</button>
-            </div>
-          </form>
-          <button type="button" class="net-mode" data-net="solo"><b>Solo</b><span>The mission. Cut the relays and hold the berth.</span><i>&rarr;</i></button>
-        </div>
-        <p class="net-status" role="status"></p>
-      </div>
-      <div class="net-guns" hidden><span class="net-k">Gun</span><div data-net="guns"></div></div>
-      <button type="button" class="net-fs" aria-pressed="false"><svg class="enter" viewBox="0 0 16 16" aria-hidden="true"><path d="M1 5.5V1h4.5M10.5 1H15v4.5M15 10.5V15h-4.5M5.5 15H1v-4.5"/></svg><svg class="exit" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1v4.5H1M15 5.5h-4.5V1M10.5 15v-4.5H15M1 10.5h4.5V15"/></svg><span>Fullscreen</span></button>`;
+      <header class="fe-top">
+        <div class="fe-brand"><span class="fe-mark">SALTLINE</span><span class="fe-crumb" data-fe="crumb"></span></div>
+        <div class="fe-me"><span class="fe-online" data-net-stat="online"></span><label class="fe-name"><span>Name</span><input data-net="name" maxlength="16" placeholder="Breacher" autocomplete="off" spellcheck="false"></label></div>
+      </header>
+      <main class="fe-body">
+        <section class="fe-screen fe-home" data-s="home" aria-label="Saltline">
+          <div class="fe-eyebrow"><span class="tag">B4</span><span>Port Authority Breach Unit · up to 10 a match</span></div>
+          <h1 class="fe-word">SALTLINE</h1>
+          <nav class="fe-menu" aria-label="Play">
+            <button type="button" class="fe-item" data-go="quick"><b>Quick play</b><span>Team deathmatch or deathmatch, with whoever is on.</span><em data-net-stat="dm"></em><i aria-hidden="true">&rarr;</i></button>
+            <button type="button" class="fe-item" data-go="private"><b>Private match</b><span>Make a room, share the code, play with friends.</span><em data-net-stat="rooms"></em><i aria-hidden="true">&rarr;</i></button>
+            <button type="button" class="fe-item" data-act="solo"><b>Solo mission</b><span>Cut the three relays and hold the berth. Saltline Terminal.</span><i aria-hidden="true">&rarr;</i></button>
+          </nav>
+        </section>
+
+        <section class="fe-screen fe-split" data-s="quick" aria-label="Quick play" hidden>
+          <div class="fe-col">
+            <h2 class="fe-h">Quick play</h2>
+            <div class="fe-k" id="fe-q-mode">Mode</div>
+            <div class="fe-modes" role="group" aria-labelledby="fe-q-mode" data-fe="q-modes"></div>
+            <div class="fe-go"><button type="button" class="fe-cta" data-act="find"><span>Find match</span><small data-fe="q-sub"></small></button><p class="fe-status" role="status"></p></div>
+          </div>
+          <div class="fe-col">
+            <div class="fe-k" id="fe-q-map">Map</div>
+            <div class="fe-maps" role="group" aria-labelledby="fe-q-map" data-fe="q-maps"></div>
+            <div class="fe-k">Gun</div>
+            <div data-fe="gun-slot"></div>
+          </div>
+        </section>
+
+        <section class="fe-screen fe-split" data-s="team" aria-label="Choose a team" hidden>
+          <div class="fe-col fe-team-wide">
+            <h2 class="fe-h">Choose a team</h2>
+            <p class="fe-lead" data-fe="t-sub"></p>
+            <div class="fe-k">Teams</div>
+            <div class="fe-teams" data-fe="t-teams"></div>
+            <div class="fe-go"><p class="fe-status" role="status"></p></div>
+          </div>
+          <div class="fe-col">
+            <div class="fe-k">Gun</div>
+            <div data-fe="gun-slot"></div>
+          </div>
+        </section>
+
+        <section class="fe-screen fe-split" data-s="private" aria-label="Private match" hidden>
+          <div class="fe-col">
+            <h2 class="fe-h">Private match</h2>
+            <div class="fe-k" id="fe-p-mode">New room</div>
+            <div class="fe-modes" role="group" aria-labelledby="fe-p-mode" data-fe="p-modes"></div>
+            <div class="fe-go"><button type="button" class="fe-cta" data-act="create"><span>Create room</span><small data-fe="p-sub"></small></button><p class="fe-status" role="status"></p></div>
+            <div class="fe-or">Or join with a code</div>
+            <form class="fe-join" novalidate><input class="fe-code-in" data-net="code" maxlength="6" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code"><button type="submit" class="fe-btn">Join</button></form>
+          </div>
+          <div class="fe-col">
+            <div class="fe-k" id="fe-p-map">Map for the new room</div>
+            <div class="fe-maps" role="group" aria-labelledby="fe-p-map" data-fe="p-maps"></div>
+          </div>
+        </section>
+
+        <section class="fe-screen fe-split" data-s="room" aria-label="Room lobby" hidden>
+          <div class="fe-col">
+            <h2 class="fe-h">Private match</h2>
+            <div class="fe-room-h"><div class="fe-code"><span>Room</span><b data-fe="code"></b><em data-fe="count"></em></div><button type="button" class="fe-btn" data-act="copy">Copy invite</button></div>
+            <div class="fe-k" id="fe-r-mode">Mode</div>
+            <div class="fe-modes" role="group" aria-labelledby="fe-r-mode" data-fe="r-modes"></div>
+            <div class="fe-k" data-fe="r-who">Players</div>
+            <div class="fe-teams" data-fe="teams"></div>
+            <p class="fe-idle" data-fe="idle"></p>
+            <div class="fe-go"><button type="button" class="fe-cta" data-act="join"><span>Join match</span><small data-fe="r-sub"></small></button><p class="fe-status" role="status"></p></div>
+          </div>
+          <div class="fe-col">
+            <div class="fe-k">Map</div>
+            <div class="fe-maps one" data-fe="r-map"></div>
+            <p class="fe-note">The map is set when the room is made. For another map, make a new room.</p>
+            <div class="fe-k">Gun</div>
+            <div data-fe="gun-slot"></div>
+          </div>
+        </section>
+      </main>
+      <footer class="fe-foot">
+        <button type="button" class="fe-btn" data-act="back" hidden><kbd>Esc</kbd>Back</button>
+        <button type="button" class="fe-btn" data-act="leave" hidden>Leave room</button>
+      </footer>`;
     const $ = s => gate.querySelector(s);
-    const nameIn = $('[data-net="name"]'), codeIn = $('[data-net="code"]'), roomForm = $('.net-room'), roomBtn = $('[data-net="room"]'), statusEl = $('.net-status');
-    const allBtns = () => [...gate.querySelectorAll('button:not(.net-fs)')];
-    // fullscreen takes the whole page, so this screen stays on top of the game; the game's own Settings switch exits it the same way
-    const fsBtn = $('.net-fs'), fsLabel = fsBtn.querySelector('span'), fsRoot = document.documentElement;
+    const nameIn = $('[data-net="name"]'), codeIn = $('[data-net="code"]');
+    const allBtns = () => [...gate.querySelectorAll('button, input')].filter(x => x !== nameIn);
+
+    // fullscreen: one button, bottom right, on these screens and on the pause screen. It takes the whole page, so these
+    // screens stay on top of the game; the game's own Settings switch exits it the same way
+    const fsBtn = document.createElement('button');
+    fsBtn.type = 'button'; fsBtn.className = 'net-fs'; fsBtn.hidden = true; fsBtn.setAttribute('aria-pressed', 'false');
+    fsBtn.innerHTML = '<svg class="enter" viewBox="0 0 16 16" aria-hidden="true"><path d="M1 5.5V1h4.5M10.5 1H15v4.5M15 10.5V15h-4.5M5.5 15H1v-4.5"/></svg><svg class="exit" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1v4.5H1M15 5.5h-4.5V1M10.5 15v-4.5H15M1 10.5h4.5V15"/></svg><span>Fullscreen</span>';
+    const fsLabel = fsBtn.querySelector('span'), fsRoot = document.documentElement;
     const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
-    if (!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen) || document.fullscreenEnabled === false || document.webkitFullscreenEnabled === false) fsBtn.hidden = true;
+    const fsOk = !!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen) && document.fullscreenEnabled !== false && document.webkitFullscreenEnabled !== false;
     const fsShow = () => { const on = !!fsEl(); fsBtn.classList.toggle('on', on); fsBtn.setAttribute('aria-pressed', String(on)); fsLabel.textContent = on ? 'Exit fullscreen' : 'Fullscreen'; };
     const fsFail = () => { fsLabel.textContent = 'Not available here'; setTimeout(fsShow, 2500); };
-    fsBtn.addEventListener('click', () => {
+    fsBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
       try {
         if (fsEl()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
         const r = (fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen).call(fsRoot); if (r && r.catch) r.catch(fsFail);
       } catch { fsFail(); }
     });
     for (const t of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(t, fsShow);
+    const fsWanted = () => fsOk && (!gate.hidden || gameState() === 'paused');
 
-    new MutationObserver(() => { document.documentElement.classList.toggle('net-gate-open', !gate.hidden); showGuns(); }).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
+    new MutationObserver(() => { document.documentElement.classList.toggle('net-gate-open', !gate.hidden); if (!gate.hidden) placeShared(); fsBtn.hidden = !fsWanted(); }).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
     // the loading line: a copy of the game's own, shown until the scene is up (see .net-load above)
     const load = document.createElement('div'); load.className = 'net-load'; load.setAttribute('aria-hidden', 'true');
     load.innerHTML = '<div class="boot-sub"></div><div class="boot-bar"><i></i></div>';
@@ -622,6 +818,8 @@
     /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
        whoever goes looking. Add a new entry at the top with each release. */
     const UPDATES = [
+      ['17 Nov 2026', ['A new front end: Quick play, Private match and Solo mission, each with its own screen', 'Quick play: pick Team deathmatch or Deathmatch, a map and a gun, then Find match', 'Maps are picked from pictures of them seen from above', 'Rooms have a lobby: the code to share, the map, both modes, and who is on which team',
+        'Team deathmatch is Red against Blue, and you pick your side: in a room, or after Find match in Quick play', 'In Team deathmatch every helmet is its team\'s colour', 'Fullscreen at the bottom right of every menu screen and of the pause screen', 'Solo: a Main menu button in the pause menu of a mission']],
       ['17 Nov 2026', ['Ten seconds between rounds: the result stays up with a countdown, nobody moves and nobody can be hurt, then everyone starts fresh']],
       ['17 Nov 2026', ['Team play: a team\'s score is always the sum of its players on the board. Kills of players who left now show as their own row, and a player who reloads keeps their kills in one row', 'A fullscreen button at the bottom right of the first screen', 'Alpine: no more wind sound']],
       ['17 Nov 2026', ['Alpine: the middle house on the north side has a stair and an upper floor whose windows look over the street and the back lane', 'Smoke rises from the two burnt houses, signposts point to the piazza, the church and the well, and washing hangs over the alleys']],
@@ -668,37 +866,164 @@
       };
       requestAnimationFrame(tick);
     });
-    const badge = document.createElement('div'); badge.className = 'net-badge'; badge.hidden = true;
     const talk = document.createElement('div'); talk.className = 'net-talk';
 
-    let count = 0, busy = false, joiningDm = false;
-    /* Maps. The game builds one map per page load (see web/maps.js), so picking another reloads the page into it.
-       Quick play and new rooms use the map on screen; a room keeps its map, and joining one loads that map first. */
+    let count = 0, busy = false, joining = false;
+    /* Maps. The game builds one map per page load (see web/maps.js), so playing another reloads the page into it. Picking
+       a map card only marks it; the reload comes with Find match (or with joining a room that plays another map). */
     const maps = window.__saltlineMaps || { list: [{ id: 'terminal', name: 'Saltline Terminal' }], id: 'terminal', ready: Promise.resolve('terminal'), name: () => 'Saltline Terminal', choose: () => false };
     const mapId = () => maps.id, loadingText = () => ({ terminal: 'Loading the yard…', alpine: 'Loading the village…' }[mapId()] || 'Loading the arena…');   // a room link learns its map a moment after the page starts, so always ask
-    const post = path => fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ map: mapId() }) });
+    const post = (path, body) => fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     // reload into a map (and a path) without changing the one the player has chosen as theirs
     const visit = (id, path) => maps.choose(id, path, false) || (location.assign(path), true);
-    /* The gun to go in with: three cards beside the menu (web/guns.js draws them and keeps the choice). The same cards
-       are shown again each time the player goes down. They are one set, so they are put back here whenever this screen returns. */
-    const guns = window.__SALTLINE_GUNS, gunBox = $('.net-guns'), gunHost = $('[data-net="guns"]');
-    const showGuns = () => { if (guns && guns.mount && !gate.hidden) { gunBox.hidden = false; guns.mount(gunHost, 'big'); } };
-    const mapBox = $('.net-map'), mapSeg = mapBox.querySelector('.seg');
-    if (maps.list.length > 1) {
-      mapBox.hidden = false;
-      for (const m of maps.list) { const b = document.createElement('button'); b.type = 'button'; b.dataset.map = m.id; b.textContent = m.name; mapSeg.appendChild(b); }
-      const paint = () => { for (const x of mapSeg.children) x.setAttribute('aria-pressed', String(x.dataset.map === mapId())); $('[data-net="solo"] span').textContent = mapId() === 'terminal' ? 'The mission. Cut the relays and hold the berth.' : 'The mission, on Saltline Terminal.'; };
-      paint(); maps.ready.then(paint);
-      mapSeg.addEventListener('click', ev => {
-        const b = ev.target.closest('button[data-map]'); if (!b || b.disabled || busy || b.dataset.map === mapId()) return;
-        for (const x of mapSeg.children) x.setAttribute('aria-pressed', String(x === b));
-        setBusy(true); status('Loading ' + maps.name(b.dataset.map) + '…', 'busy');
-        maps.choose(b.dataset.map, '/');
+    const MAP_INFO = { terminal: 'Container harbour at first light', colosseum: 'Sand floor of a ruined arena', alpine: 'War-torn village under the Alps' };
+    const MODE_LIST = [
+      { id: 'tdm', name: 'Team deathmatch', blurb: 'Red against Blue. The team with the most kills in five minutes wins.' },
+      { id: 'dm', name: 'Deathmatch', blurb: 'Everyone for themselves. Top of the board wins.' },
+    ];
+    const modeName = id => (MODE_LIST.find(m => m.id === id) || MODE_LIST[0]).name;
+    const pick = { mode: store.get('saltline.mode') === 'dm' ? 'dm' : 'tdm', map: mapId(), newMap: mapId(), newMode: store.get('saltline.mode') === 'dm' ? 'dm' : 'tdm', roomMode: 'tdm', roomMap: mapId() };
+    let screen = 'home', roomModeSet = false;
+
+    /* The gun to go in with: three cards (web/guns.js draws them and keeps the choice). They are one set, shown on the
+       quick play and room screens, and again each time the player goes down, so they are put back whenever a screen shows them. */
+    const guns = window.__SALTLINE_GUNS;
+    const cur = () => gate.querySelector(`.fe-screen[data-s="${screen}"]`);
+    function placeShared() {
+      const slot = cur() && cur().querySelector('[data-fe="gun-slot"]');
+      if (slot && guns && guns.mount) guns.mount(slot);
+    }
+    const status = (t, kind) => { const el = cur() && cur().querySelector('.fe-status'); if (!el) return; el.textContent = t || ''; el.className = 'fe-status' + (kind ? ' ' + kind : ''); };
+    const setBusy = b => { busy = b; for (const x of allBtns()) x.disabled = b; };
+    const CRUMB = { home: '', quick: 'Quick play', team: 'Quick play · Team deathmatch', private: 'Private match', room: 'Room lobby' };
+    function show(s) {
+      screen = s;
+      for (const sec of gate.querySelectorAll('.fe-screen')) sec.hidden = sec.dataset.s !== s;
+      $('[data-fe="crumb"]').textContent = CRUMB[s] || '';
+      $('[data-act="back"]').hidden = !(s === 'quick' || s === 'private' || s === 'team');
+      $('[data-act="leave"]').hidden = s !== 'room';
+      for (const sec of gate.querySelectorAll('.fe-status')) { sec.textContent = ''; sec.className = 'fe-status'; }
+      paint(); placeShared();
+    }
+    const showGate = () => {
+      const s = session.kind === 'private' ? 'room' : session.kind === 'public' ? (session.mode === 'tdm' ? 'team' : 'quick') : screen === 'room' || screen === 'team' ? 'home' : screen;
+      if (screen !== s || gate.hidden) show(s);
+      if (!gate.hidden) return;
+      gate.hidden = false; setBusy(false);
+    };
+
+    // a mode: one row of a single choice
+    function modeRows(host, get, set, counts) {
+      if (!host.firstChild) for (const m of MODE_LIST) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'fe-mode'; b.dataset.mode = m.id;
+        b.innerHTML = '<b></b><em></em><span></span>'; b.querySelector('b').textContent = m.name; b.querySelector('span').textContent = m.blurb;
+        b.addEventListener('click', () => { if (busy) return; set(m.id); paint(); });
+        host.appendChild(b);
+      }
+      for (const b of host.children) {
+        b.setAttribute('aria-pressed', String(b.dataset.mode === get()));
+        const n = counts ? counts[b.dataset.mode] || 0 : 0, em = b.querySelector('em'), t = counts && n ? n + ' playing' : '';
+        if (em.textContent !== t) em.textContent = t; em.classList.toggle('live', !!n);
+      }
+    }
+    // a map: its picture from above (web/maps/cards/), the name on a dark fade
+    function mapCard(id, onPick) {
+      const b = document.createElement(onPick ? 'button' : 'div'); b.className = 'fe-map'; b.dataset.map = id;
+      if (onPick) { b.type = 'button'; b.addEventListener('click', () => { if (!busy) { onPick(id); paint(); } }); }
+      b.innerHTML = '<img alt="" loading="lazy" decoding="async"><span class="fe-map-tag">Selected</span><span class="fe-map-t"><b></b><small></small></span>';
+      b.querySelector('img').src = '/maps/cards/' + id + '.jpg';
+      b.querySelector('b').textContent = maps.name(id); b.querySelector('small').textContent = MAP_INFO[id] || '';
+      return b;
+    }
+    function mapCards(host, get, set) {
+      if (!host.firstChild) for (const m of maps.list) host.appendChild(mapCard(m.id, set));
+      for (const b of host.children) b.setAttribute('aria-pressed', String(b.dataset.map === get()));
+    }
+
+    // who is in this room right now, from the room connection (everyone's lobby presence: mode, team, name, kills this round)
+    const roundNo = () => Math.floor(Date.now() / 310000);   // the game's rounds: five minutes and a ten-second break
+    function people() {
+      if (!room) return [];
+      return room.peers().map(p => {
+        const pr = p.presence || {}, me = !!p.sameTab;
+        const n = typeof pr.n === 'string' && pr.n.trim() ? pr.n.trim().slice(0, 16) : me && nameIn.value.trim() ? nameIn.value.trim().slice(0, 16) : 'Breacher';
+        return { me, n, m: pr.m === 'dm' || pr.m === 'tdm' || pr.m === 'solo' ? pr.m : '', tm: pr.tm === 0 || pr.tm === 1 ? pr.tm : -1, k: pr.rd === roundNo() ? Math.max(0, pr.k | 0) : 0, c: typeof pr.c === 'string' && /^#[0-9a-f]{6}$/i.test(pr.c) ? pr.c : '' };
       });
     }
-    const status = (t, kind) => { statusEl.textContent = t || ''; statusEl.className = 'net-status' + (kind ? ' ' + kind : ''); };
-    const setBusy = b => { busy = b; for (const x of allBtns()) x.disabled = b; };
-    const showGate = () => { if (!gate.hidden) return; gate.hidden = false; setBusy(false); };
+    const TEAMS = [{ name: 'Red', css: '#ff4b3e' }, { name: 'Blue', css: '#3f8cff' }];   // the same as the game's (scripts/gun-hooks.mjs, 16)
+    function roster(list, css) {   // css: the team colour for every dot; otherwise each player's own
+      const ul = document.createElement('ul');
+      if (!list.length) { const li = document.createElement('li'); li.className = 'empty'; li.textContent = 'Nobody in yet'; ul.appendChild(li); return ul; }
+      for (const e of list.sort((a, b) => b.k - a.k)) {
+        const li = document.createElement('li'), pip = document.createElement('i'), nm = document.createElement('span'), sc = document.createElement('span');
+        if (css || e.c) pip.style.background = css || e.c; nm.className = 'nm'; nm.textContent = e.n; sc.className = 'sc'; sc.textContent = e.k + (e.k === 1 ? ' kill' : ' kills');
+        li.append(pip, nm);
+        if (e.me) { const y = document.createElement('span'); y.className = 'you'; y.textContent = 'You'; li.appendChild(y); }
+        li.appendChild(sc); ul.appendChild(li);
+      }
+      return ul;
+    }
+    let teamSig = '';
+    function paintRoom() {
+      const all = people(), ok = room && room.connected();
+      const counts = { dm: all.filter(e => e.m === 'dm').length, tdm: all.filter(e => e.m === 'tdm').length };
+      modeRows($('[data-fe="r-modes"]'), () => pick.roomMode, v => { pick.roomMode = v; roomModeSet = true; }, counts);
+      $('[data-fe="code"]').textContent = session.code || '';
+      $('[data-fe="count"]').textContent = ok ? all.length + '/' + MAX : 'Connecting';
+      const mapHost = $('[data-fe="r-map"]');
+      if (mapHost.dataset.map !== pick.roomMap) { mapHost.dataset.map = pick.roomMap; mapHost.textContent = ''; mapHost.appendChild(mapCard(pick.roomMap, null)); }
+      const tdm = pick.roomMode === 'tdm', teams = $('[data-fe="teams"]');
+      const sig = [pick.roomMode, ok, busy, all.map(e => [e.n, e.m, e.tm, e.k, e.c, e.me].join(',')).join(';')].join('|');
+      if (sig !== teamSig) {
+        teamSig = sig; teams.textContent = ''; teams.classList.toggle('ffa', !tdm);
+        $('[data-fe="r-who"]').textContent = tdm ? 'Teams' : 'Players';
+        if (tdm) teamBoxes(teams, all, ok);
+        else teamBox(teams, 'In the match', '', all.filter(e => e.m === 'dm'), false, -1, ok);
+        const idle = all.filter(e => !e.me && e.m !== 'dm' && e.m !== 'tdm'), il = $('[data-fe="idle"]'); il.textContent = '';
+        if (idle.length) { il.append('In the lobby: '); idle.forEach((e, i) => { const b = document.createElement('b'); b.textContent = e.n; il.append(b, (e.m === 'solo' ? ' (playing solo)' : '') + (i < idle.length - 1 ? ', ' : '')); }); }
+        $('[data-fe="r-sub"]').textContent = !ok ? 'Connecting to the room…' : counts.dm ? counts.dm + ' in the match' : 'Start it. Others join when they are ready';
+      }
+      // Team deathmatch has no Join match: each player picks Red or Blue
+      const join = $('[data-act="join"]'); join.hidden = tdm; join.disabled = busy || !ok;
+    }
+    // one team: its name in its colour, its kills, who is on it, and the button to join it
+    function teamBox(host, title, css, list, tdm, team, ok) {
+      const d = document.createElement('div'); d.className = 'fe-team' + (list.some(e => e.me) ? ' mine' : '');
+      if (css) d.style.setProperty('--team', css);
+      const h = document.createElement('div'); h.className = 'fe-team-h';
+      const b = document.createElement('b'); b.textContent = title; if (css) b.style.color = css;
+      const s = document.createElement('span'); const kills = list.reduce((a, e) => a + e.k, 0);
+      s.textContent = tdm ? kills + (kills === 1 ? ' kill' : ' kills') : list.length + (list.length === 1 ? ' player' : ' players');
+      h.append(b, s); d.append(h, roster(list, css));
+      if (team === 0 || team === 1) { const j = document.createElement('button'); j.type = 'button'; j.className = 'fe-join-team'; j.dataset.team = String(team); j.textContent = 'Join ' + title; j.disabled = busy || !ok; d.appendChild(j); }
+      host.appendChild(d);
+    }
+    function teamBoxes(host, all, ok) {
+      for (const i of [0, 1]) teamBox(host, TEAMS[i].name, TEAMS[i].css, all.filter(e => e.m === 'tdm' && e.tm === i), true, i, ok);
+    }
+    // quick play, Team deathmatch: the open match is found; now the player picks a side
+    let pickSig = '';
+    function paintTeam() {
+      const all = people(), ok = room && room.connected(), host = $('[data-fe="t-teams"]');
+      const inIt = all.filter(e => e.m === 'tdm').length;
+      $('[data-fe="t-sub"]').textContent = maps.name(mapId()) + ' · ' + (ok ? inIt ? inIt + (inIt === 1 ? ' player' : ' players') + ' in this match' : 'nobody in this match yet' : 'connecting…');
+      const sig = [ok, busy, all.map(e => [e.n, e.m, e.tm, e.k, e.c, e.me].join(',')).join(';')].join('|');
+      if (sig === pickSig) return;
+      pickSig = sig; host.textContent = ''; teamBoxes(host, all, ok);
+    }
+    function paint() {
+      modeRows($('[data-fe="q-modes"]'), () => pick.mode, v => { pick.mode = v; store.set('saltline.mode', v); });
+      mapCards($('[data-fe="q-maps"]'), () => pick.map, v => { pick.map = v; });
+      $('[data-fe="q-sub"]').textContent = maps.name(pick.map) + ' · ' + modeName(pick.mode);
+      modeRows($('[data-fe="p-modes"]'), () => pick.newMode, v => { pick.newMode = v; });
+      mapCards($('[data-fe="p-maps"]'), () => pick.newMap, v => { pick.newMap = v; });
+      $('[data-fe="p-sub"]').textContent = maps.name(pick.newMap) + ' · ' + modeName(pick.newMode);
+      if (screen === 'room') paintRoom();
+      if (screen === 'team') paintTeam();
+      $('[data-act="solo"] span').textContent = mapId() === 'terminal' ? 'Cut the three relays and hold the berth. Saltline Terminal.' : 'Cut the three relays and hold the berth. Loads Saltline Terminal.';
+    }
+    const guess = mapId();
+    maps.ready.then(v => { if (pick.map === guess) pick.map = v; if (pick.newMap === guess) pick.newMap = v; pick.roomMap = v; paint(); });
 
     // name: the game reads it from localStorage when it starts, and from its own name field after that
     nameIn.value = store.get('saltline.mp.name') || '';
@@ -718,50 +1043,69 @@
       }
       return false;
     }
+    // into the match of this room: Deathmatch, or the team the player picked (0 Red, 1 Blue)
+    async function joinMatch(mode, team) {
+      if (mode !== 'dm' && team !== 0 && team !== 1) return false;
+      joining = true;
+      const ok = await press(mode === 'dm' ? '.mp-lobby [data-mp="join-dm"]' : `.mp-lobby [data-mp="join-t${team}"]`, 30000);
+      joining = false;
+      return ok;
+    }
 
-    async function quickPlay() {
+    async function quickPlay(mode) {
       if (busy) return;
-      if (session.kind === 'public' && room) { // already in a public room: back into its match
+      store.set('saltline.mode', mode);
+      if (session.kind === 'public' && room && session.mode === mode) { // already in a public room for this mode: back into its match
+        if (mode === 'tdm') { show('team'); return; }
         setBusy(true); status('Joining the match…', 'busy');
-        joiningDm = true;
-        const ok = await press('.mp-lobby [data-mp="join-dm"]');
-        joiningDm = false;
+        const ok = await joinMatch(mode);
         if (ok) { gate.hidden = true; status(''); } else status('Could not join. Try again.', 'err');
         setBusy(false);
         return;
       }
-      if (session.kind) { visit(mapId(), '/?play=dm'); return; } // the game connects once per page; start over, on the same map
+      if (session.kind) { visit(mapId(), '/?play=' + mode); return; } // the game connects once per page; start over, on the same map
       setBusy(true); status('Finding a match…', 'busy');
       try {
-        const r = await post('/api/quick');
+        const r = await post('/api/quick', { map: mapId(), mode });
         if (!r.ok) throw new Error(String(r.status));
         const { code } = await r.json();
-        startRoom(code, 'public');
+        startRoom(code, 'public'); session.mode = mode;
+        if (mode === 'tdm') { // the match is found: show who is on each side and let the player pick one
+          setBusy(false); show('team');
+          if (room) room.onPeers(() => { if (screen === 'team' && !gate.hidden) paintTeam(); });
+          return;
+        }
         status(gameState() === 'title' ? 'Joining the match…' : loadingText(), 'busy');
-        joiningDm = true;
-        const ok = await press('.mp-lobby [data-mp="join-dm"]', 30000);
-        joiningDm = false;
+        const ok = await joinMatch(mode);
         if (ok) { gate.hidden = true; status(''); } else status('Could not join. Check your connection and try again.', 'err');
-      } catch { joiningDm = false; status('Could not reach the server. Check your connection and try again.', 'err'); }
+      } catch { joining = false; status('Could not reach the server. Check your connection and try again.', 'err'); }
       setBusy(false);
     }
+    function findMatch() {
+      if (busy) return;
+      if (pick.map !== mapId()) { setBusy(true); status('Loading ' + maps.name(pick.map) + '…', 'busy'); store.set('saltline.mode', pick.mode); maps.choose(pick.map, '/?play=' + pick.mode); return; }
+      quickPlay(pick.mode);
+    }
 
-    function enterPrivate(code) {
+    function enterPrivate(code, info) {
       if (session.kind) { location.assign('/r/' + code); return; }
       history.replaceState(null, '', '/r/' + code);
-      gate.hidden = true;
       startRoom(code, 'private');
-      renderBadge();
+      if (info && info.mode && !roomModeSet) pick.roomMode = info.mode === 'dm' ? 'dm' : 'tdm';
+      show('room');
     }
     async function createRoom() {
       if (busy) return;
       setBusy(true); status('Creating a room…', 'busy');
       try {
-        const r = await post('/api/rooms');
+        const r = await post('/api/rooms', { map: pick.newMap, mode: pick.newMode });
         if (!r.ok) throw new Error(String(r.status));
-        const { code } = await r.json();
+        const { code, map, mode } = await r.json();
+        if (map && map !== mapId() && maps.list.some(m => m.id === map)) { status('Loading ' + maps.name(map) + '…', 'busy'); visit(map, '/r/' + code); return; } // the room plays another map: load it, then come in
         status('');
-        enterPrivate(code);
+        setBusy(false);
+        enterPrivate(code, { mode });
+        return;
       } catch { status('Could not create a room. Check your connection and try again.', 'err'); }
       setBusy(false);
     }
@@ -775,61 +1119,67 @@
         if (!info.exists) status(`No room ${code}. It may have expired.`, 'err');
         else if (info.players >= info.max) status(`Room ${code} is full (${info.max} players).`, 'err');
         else if (info.map && info.map !== mapId() && maps.list.some(m => m.id === info.map)) { status('Loading ' + maps.name(info.map) + '…', 'busy'); visit(info.map, '/r/' + code); return; } // the room plays another map: load it, then join
-        else { status(''); enterPrivate(code); }
+        else { status(''); setBusy(false); enterPrivate(code, info); return; }
       } catch { status('Could not reach the server. Check your connection and try again.', 'err'); }
       setBusy(false);
+    }
+    async function joinFromRoom(team) {
+      if (busy || !room) return;
+      const mode = screen === 'team' ? 'tdm' : pick.roomMode, repaint = () => (screen === 'team' ? paintTeam() : paintRoom());
+      setBusy(true); repaint(); status(gameState() === 'title' ? 'Joining the match…' : loadingText(), 'busy');
+      const ok = await joinMatch(mode, team);
+      if (ok) { gate.hidden = true; status(''); } else status('Could not join. Check your connection and try again.', 'err');
+      setBusy(false); repaint();
     }
     async function solo() {
       if (busy) return;
       if (mapId() !== 'terminal') { setBusy(true); status('Loading Saltline Terminal…', 'busy'); visit('terminal', '/?play=solo'); return; } // the mission is set in the harbour
       if (session.kind === 'public' || session.kind === 'private') { location.assign('/?play=solo'); return; }
       if (!session.kind) { session.kind = 'solo'; resolveRoom(null); }
-      setBusy(true); status(gameState() === 'title' ? '' : 'Loading the yard…', 'busy');
+      setBusy(true);
       await press('.mp-lobby [data-mp="solo"]', 30000); // the game's solo title: difficulty, settings, Deploy
-      gate.hidden = true; status(''); setBusy(false);
+      gate.hidden = true; setBusy(false);
+    }
+    function back() {
+      if (busy || !(screen === 'quick' || screen === 'private' || screen === 'team')) return false;
+      if (screen === 'team') { show('quick'); return true; }
+      const from = screen; show('home'); const to = gate.querySelector(`[data-go="${from}"]`); if (to && document.activeElement && gate.contains(document.activeElement)) to.focus({ preventScroll: true });
+      return true;
     }
 
     gate.addEventListener('click', ev => {
-      const b = ev.target.closest('button[data-net]'); if (!b || b.disabled) return;
-      const a = b.dataset.net;
-      if (a === 'dm') quickPlay();
-      else if (a === 'solo') solo();
+      const b = ev.target.closest('button'); if (!b || b.disabled) return;
+      if (b.dataset.go) { if (busy) return; show(b.dataset.go); const first = cur().querySelector('.fe-mode[aria-pressed="true"]'); if (first && ev.detail === 0) first.focus({ preventScroll: true }); return; }
+      if (b.dataset.team) { joinFromRoom(+b.dataset.team); return; }
+      const a = b.dataset.act;
+      if (a === 'solo') solo();
+      else if (a === 'find') findMatch();
       else if (a === 'create') createRoom();
-      else if (a === 'room') {
-        const open = roomForm.hidden;
-        roomForm.hidden = !open; roomBtn.setAttribute('aria-expanded', String(open));
-        if (open) setTimeout(() => codeIn.focus({ preventScroll: true }), 0);
+      else if (a === 'join') joinFromRoom(-1);
+      else if (a === 'back') back();
+      else if (a === 'leave') location.assign('/');
+      else if (a === 'copy') {
+        const code = session.code;
+        (async () => { try { await navigator.clipboard.writeText(location.origin + '/r/' + code); b.textContent = 'Copied'; } catch { b.textContent = code; } setTimeout(() => { b.textContent = 'Copy invite'; }, 1600); })();
       }
     });
-    roomForm.addEventListener('submit', ev => { ev.preventDefault(); joinRoom(); });
-    for (const inp of [nameIn, codeIn]) for (const t of ['keydown', 'keyup']) inp.addEventListener(t, ev => ev.stopPropagation()); // keep typing out of the game
+    $('.fe-join').addEventListener('submit', ev => { ev.preventDefault(); joinRoom(); });
+    for (const inp of [nameIn, codeIn]) for (const t of ['keydown', 'keyup']) inp.addEventListener(t, ev => { if (ev.key !== 'Escape') ev.stopPropagation(); }); // keep typing out of the game
     codeIn.addEventListener('input', () => { codeIn.value = codeIn.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); status(''); });
+    // Esc goes back a screen
+    addEventListener('keydown', ev => { if (ev.key === 'Escape' && !gate.hidden && back()) { ev.preventDefault(); ev.stopPropagation(); } }, true);
 
-    // the solo title's "Multiplayer" button opens this screen instead of the room lobby
+    // the solo title's "Multiplayer" button opens these screens instead of the game's own room lobby
     addEventListener('click', ev => {
       const b = ev.target.closest && ev.target.closest('[data-mp="to-lobby-title"]');
-      if (b && session.kind !== 'private') { ev.stopPropagation(); ev.preventDefault(); status(''); showGate(); }
+      if (b) { ev.stopPropagation(); ev.preventDefault(); show(session.kind === 'private' ? 'room' : 'home'); showGate(); }
     }, true);
 
-    function renderBadge() {
-      badge.textContent = '';
-      if (session.kind !== 'private' || !session.code) return;
-      const code = session.code;
-      const btn = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.addEventListener('click', fn); return b; };
-      const tag = document.createElement('span'); tag.innerHTML = 'Room <b></b>'; tag.querySelector('b').textContent = code;
-      const n = document.createElement('span'); n.className = 'dim'; n.textContent = count ? count + '/' + MAX : '';
-      const copy = btn('Copy invite', async () => {
-        try { await navigator.clipboard.writeText(location.origin + '/r/' + code); copy.textContent = 'Copied'; } catch { copy.textContent = code; }
-        setTimeout(() => { copy.textContent = 'Copy invite'; }, 1600);
-      });
-      badge.append(tag, n, copy, btn('Leave', () => location.assign('/')));
-    }
-
-    // back to the title after a quick-play match: bring this screen up in the same tick, not on the next poll
+    // back to the title after a match: bring these screens up in the same tick, not on the next poll
     (function hook() {
       const g = G();
       if (!g || !g.events || typeof g.events.on !== 'function') { setTimeout(hook, 200); return; }
-      g.events.on('game:state', e => { if (e && e.state === 'title' && session.kind === 'public' && !joiningDm) showGate(); });
+      g.events.on('game:state', e => { if (e && e.state === 'title' && (session.kind === 'public' || session.kind === 'private') && !joining) showGate(); });
     })();
 
     // /api/online -> { online, dm: {players, matches}, rooms: {players, rooms} }, or null when the server can't be reached
@@ -838,17 +1188,15 @@
     }
     const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
 
-    // live numbers on the first screen: who's online, how many in Deathmatch, how many rooms are going.
-    // Refreshed every 10 s while the screen is up.
+    // live numbers on the first screen: who's online, how many in quick play, how many rooms are going. Every 10 s while up.
     const gateStats = (() => {
       const onlineEl = $('[data-net-stat="online"]'), dmEl = $('[data-net-stat="dm"]'), roomsEl = $('[data-net-stat="rooms"]');
-      const fallback = onlineEl.textContent;
       let at = 0, inflight = false;
       function render(s) {
-        if (!s || !s.online) { onlineEl.textContent = fallback; dmEl.textContent = ''; roomsEl.textContent = ''; return; }
+        if (!s || !s.online) { onlineEl.textContent = ''; dmEl.textContent = ''; roomsEl.textContent = ''; return; }
         onlineEl.textContent = '';
         const live = document.createElement('span'); live.className = 'net-live';
-        live.append(document.createElement('i'), s.online + ' online now');
+        live.append(document.createElement('i'), s.online + ' online');
         onlineEl.appendChild(live);
         dmEl.textContent = s.dm.players ? plural(s.dm.players, 'player', 'players') + ' in ' + plural(s.dm.matches, 'match', 'matches') : '';
         roomsEl.textContent = s.rooms.rooms ? plural(s.rooms.rooms, 'room', 'rooms') + ' going · ' + plural(s.rooms.players, 'player', 'players') : '';
@@ -903,9 +1251,20 @@
       voiceRow();
       const st = gameState(), onTitle = st === 'title';
       // after a quick-play match the game drops back to its title: this screen is home
-      if (session.kind === 'public' && onTitle && !joiningDm) showGate();
-      const showBadge = session.kind === 'private' && onTitle && gate.hidden;
-      if (badge.hidden === showBadge) badge.hidden = !showBadge;
+      if ((session.kind === 'public' || session.kind === 'private') && onTitle && !joining) showGate();
+      if (fsBtn.hidden === fsWanted()) fsBtn.hidden = !fsWanted();
+      if (screen === 'room' && !gate.hidden) paintRoom();
+      if (screen === 'team' && !gate.hidden) paintTeam();
+      // solo: the way back to these screens. The solo title's "Multiplayer" button says where it goes, and the pause menu of a
+      // mission gets a Main menu button (a fresh page, so nothing of the mission carries over)
+      const toMenu = document.querySelector('[data-mp="to-lobby-title"]');
+      if (toMenu && toMenu.textContent !== 'Main menu') toMenu.textContent = 'Main menu';
+      const pauseActs = session.kind === 'solo' && document.querySelector('#ui [data-s="paused"] .m-actions');
+      if (pauseActs && !pauseActs.querySelector('[data-net-menu]')) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.dataset.netMenu = '1'; b.textContent = 'Main menu';
+        b.addEventListener('click', ev => { ev.stopPropagation(); location.assign('/'); });
+        pauseActs.appendChild(b);
+      }
       const room = document.querySelector('[data-net-room]');
       const roomText = session.code && session.kind !== 'dead' ? (session.kind === 'public' ? 'Open match' : 'Room ' + session.code) + ' · ' + maps.name(mapId()) : 'Online room';
       if (room && room.textContent !== roomText) room.textContent = roomText;
@@ -920,37 +1279,40 @@
     }, 250);
 
     function mount() {
-      document.body.append(gate, badge, talk);
+      document.body.append(gate, fsBtn, talk);
       const path = location.pathname.match(/^\/r\/([A-Za-z0-9]{6})\/?$/);
       const code = path ? path[1].toUpperCase() : '';
       const play = new URLSearchParams(location.search).get('play');
       if (CODE_RE.test(code)) {
-        startRoom(code, 'private'); renderBadge();
+        startRoom(code, 'private');
+        show('room'); gate.hidden = false;
+        if (room) room.onPeers(() => { if (screen === 'room' && !gate.hidden) paintRoom(); });
         // maps.js already asked this room for its map before the game started; if that answer came too late, load the right map now
-        Promise.all([fetch('/api/rooms/' + code).then(r => r.json()), maps.ready]).then(([info, now]) => { if (info && info.exists && info.map && info.map !== now && maps.list.some(m => m.id === info.map)) visit(info.map, '/r/' + code); }).catch(() => {});
+        Promise.all([fetch('/api/rooms/' + code).then(r => r.json()), maps.ready]).then(([info, now]) => {
+          if (info && info.exists && info.map && info.map !== now && maps.list.some(m => m.id === info.map)) { visit(info.map, '/r/' + code); return; }
+          if (info && info.mode && !roomModeSet) { pick.roomMode = info.mode === 'dm' ? 'dm' : 'tdm'; paint(); }
+        }).catch(() => {});
         return;
       }
       if (location.search) history.replaceState(null, '', '/');
-      gate.hidden = false;
-      if (play === 'dm') quickPlay();
-      else if (play === 'solo') solo();
+      if (play === 'dm' || play === 'tdm') { pick.mode = play; show('quick'); gate.hidden = false; quickPlay(play); }
+      else if (play === 'solo') { show('home'); gate.hidden = false; solo(); }
+      else { show('home'); gate.hidden = false; }
     }
     if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
 
     return {
-      count(n) { if (n !== count) { count = n; renderBadge(); } },
+      count(n) { if (n !== count) { count = n; if (screen === 'room' && !gate.hidden) paintRoom(); } },
       fatal(why) {
-        const { code, kind } = session;
+        const { code, kind } = session, mode = session.mode || 'dm';
         session.kind = 'dead'; session.code = '';
-        badge.hidden = true;
         if (kind === 'public') { // the open match filled up between finding it and joining: find another
-          if (quickTry < 3) { visit(mapId(), '/?play=dm&try=' + (quickTry + 1)); return; }
-          showGate(); status('Every open match filled up just now. Try again.', 'err');
+          if (quickTry < 3) { visit(mapId(), '/?play=' + mode + '&try=' + (quickTry + 1)); return; }
+          show('quick'); gate.hidden = false; status('Every open match filled up just now. Try again.', 'err');
           return;
         }
         history.replaceState(null, '', '/');
-        showGate();
-        roomForm.hidden = false; roomBtn.setAttribute('aria-expanded', 'true');
+        show('private'); gate.hidden = false; setBusy(false);
         codeIn.value = code;
         status(why === 'full' ? `Room ${code} is full (${MAX} players).` : why === 'not_found' ? `No room ${code}. It may have expired.` : 'Could not join that room.', 'err');
       },
