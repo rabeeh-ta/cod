@@ -47,9 +47,10 @@ export function applyMapHooks(html) {
   hook(/for\(let\[(\w+),(\w+)\]of (\w+)\)\{let (\w+)=null,(\w+)=1e9;/,
     (m, a, b, list, c, d) => `for(let[${a},${b}]of(${LVL}.explosivesOnly?[]:${list})){let ${c}=null,${d}=1e9;`, 'the scattered barrels');
 
-  // 5. harbour sounds a map can switch off with level.ambience = { sea: 0, harbour: false }, and the rain with rain: 0
+  // 5. harbour sounds a map can switch off with level.ambience = { sea: 0, harbour: false }, and the rain with rain: 0, the wind with wind: 0
   hook(/(\w+)\.sea\.setGain\(/, (m, v) => `${v}.sea.setGain((${LVL}.ambience?${LVL}.ambience.sea:1)*`, 'the sea loop');
-  for (const one of ['rain', 'rainIn']) hook(new RegExp(`(\\w+)\\.${one}\\.setGain\\(`), (m, v) => `${v}.${one}.setGain((${LVL}.ambience&&${LVL}.ambience.rain!=null?${LVL}.ambience.rain:1)*`, `the ${one} loop`);
+  const KEY = { rain: 'rain', rainIn: 'rain', wind: 'wind' };
+  for (const one of ['rain', 'rainIn', 'wind']) hook(new RegExp(`(\\w+)\\.${one}\\.setGain\\(`), (m, v) => `${v}.${one}.setGain((${LVL}.ambience&&${LVL}.ambience.${KEY[one]}!=null?${LVL}.ambience.${KEY[one]}:1)*`, `the ${one} loop`);
   for (const one of ['foghorn', 'container_bang']) {
     hook(new RegExp(`(\\w+)\\("${one}",\\{`), (m, play) => `(${LVL}.ambience&&${LVL}.ambience.harbour===!1?()=>{}:${play})("${one}",{`, `the ${one} sound`);
   }

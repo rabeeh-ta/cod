@@ -1124,7 +1124,7 @@ void main(){
         { pos: [9, 1.9, -6], look: [22, 6, -14] }, { pos: [21, 1.8, -2], look: [26, 9, -14] }, { pos: [23, 1.8, 8], look: [10, 4, 9] }, { pos: [8.5, 1.8, 15.5], look: [-8, 3.5, 15] },
         { pos: [-7, 1.8, 15.5], look: [-14, 3, 8] }, { pos: [-20.5, 1.8, 9], look: [-28, 3.5, 0] },
       ],
-      explosives: [], explosivesOnly: true, ambience: { sea: 0, harbour: false, rain: 0 },
+      explosives: [], explosivesOnly: true, ambience: { sea: 0, harbour: false, rain: 0, wind: 0 },
       stats: { ...meshes, plants: PLANTS.tris, shadow, sky },
       groundSurfaceAt: (x, z) => (heap(x, z) > 0.02 ? 'concrete' : groundKind(x, z) === 'cobble' ? 'concrete' : 'dirt'),
       update(dt) {
