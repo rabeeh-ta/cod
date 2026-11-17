@@ -125,6 +125,50 @@ export function applyGunHooks(html) {
   swap(`P.invulnerable = true; if (first) refillFrags();`, `P.invulnerable = true; refillFrags();`, 'grenades on a respawn');      // every life starts with its grenades, not only the first
   swap(`const av = kit.create(); avatars.add(av.group);`, `const av = kit.create(); avatars.add(av.group); try { ${GUNS}.avatar(av); } catch (e) { console.error('[guns] avatar: ' + e); }`, 'a new avatar');
 
+  // 14. a team's score is the sum of the rows under it, always. The game kept the kills of players who left (or reloaded,
+  //     which makes a new connection) in the team score but dropped them from the board, so the numbers stopped adding up.
+  //     Now each kept score remembers who it was (player id, name, deaths): it is added to that player's row when they are
+  //     back on the same team, and otherwise shown as its own row, "(left)". The team scores are then counted from the rows.
+  swap(`if (mp.mode === 'tdm' && R.tm >= 0 && R.k > 0) bankPut(R.peer, R.tm, R.k);`,
+    `if (mp.mode === 'tdm' && R.tm >= 0 && R.k > 0) bankPut(R.peer, R.tm, R.k, R.id, R.name, R.d);`, 'a leaving player is kept');
+  swap(`    function bankPut(peer, tm, k) {
+      if (peer === net.myPeer || remotes.has(peer)) return;
+      const cur = mp.bank[peer];
+      if (cur && cur[1] >= k) return;
+      mp.bank[peer] = [tm, k];`, `    function bankPut(peer, tm, k, id, name, d) {
+      if (peer === net.myPeer || remotes.has(peer)) return;
+      const cur = mp.bank[peer];
+      if (cur && cur[1] >= k) return;
+      mp.bank[peer] = [tm, k, typeof id === 'string' ? id.slice(0, 40) : (cur && cur[2]) || '', typeof name === 'string' && name ? name.slice(0, 16) : (cur && cur[3]) || '', int(d)];`, 'what is kept of a player who left');
+  swap(`Object.keys(mp.bank).map(k => [k, mp.bank[k][0], mp.bank[k][1]])`, `Object.keys(mp.bank).map(k => [k, ...mp.bank[k]])`, 'kept players, sent');
+  swap(`bankPut(b[0], b[1], int(b[2]));`, `bankPut(b[0], b[1], int(b[2]), b[3], b[4], b[5]);`, 'kept players, received');
+  swap(`    function teamTotals() {
+      const t = [0, 0];
+      if (mp.team === 0 || mp.team === 1) t[mp.team] += stats.tdm.kills;
+      for (const R of remotes.values()) if (R.tm === 0 || R.tm === 1) t[R.tm] += R.k;
+      for (const k in mp.bank) t[mp.bank[k][0]] += mp.bank[k][1];
+      return t;
+    }`, `    function teamTotals() {
+      const t = [0, 0];
+      for (const r of liveRows()) if (r.tm === 0 || r.tm === 1) t[r.tm] += r.k;
+      return t;
+    }`, 'the team scores');
+  swap(`      for (const R of remotes.values()) rows.push({ me: false, peer: R.peer, name: R.name || 'Someone', k: R.k, d: R.d, tm: R.tm, alive: R.alive && !R.away, css: R.own || R.css || '#e8e4da' });
+      return rows;`, `      for (const R of remotes.values()) rows.push({ me: false, peer: R.peer, id: R.id, name: R.name || 'Someone', k: R.k, d: R.d, tm: R.tm, alive: R.alive && !R.away, css: R.own || R.css || '#e8e4da' });
+      if (mp.mode === 'tdm') for (const peer in mp.bank) {
+        const [tm, k, id, name, d] = mp.bank[peer];
+        if (tm !== 0 && tm !== 1) continue;
+        const same = id && rows.find(r => r.tm === tm && (r.me ? id === net.myId : r.id === id));
+        if (same) { same.k += k; same.d += d || 0; same.bk = (same.bk || 0) + k; same.bd = (same.bd || 0) + (d || 0); }
+        else rows.push({ me: false, left: true, peer, id, name: (name || 'Someone') + ' (left)', k, d: d || 0, tm, alive: false, css: '#e8e4da' });
+      }
+      return rows;`, 'kept players on the board');
+  swap(`rows.length + (rows.length === 1 ? ' breacher in' : ' breachers in')`, `rows.filter(r => !r.left).length + (rows.filter(r => !r.left).length === 1 ? ' breacher in' : ' breachers in')`, 'players counted on the board');
+  swap(`for (const r of rows) if (!r.me) { const l = mp.last[r.peer]; r.k = l ? l.k : 0; r.d = l ? l.d : 0; }`,
+    `for (const r of rows) if (!r.me && !r.left) { const l = mp.last[r.peer]; r.k = (l ? l.k : 0) + (r.bk || 0); r.d = (l ? l.d : 0) + (r.bd || 0); }`, 'the rows at the end of a round');
+  swap(`        for (const r of rows) if (r.tm === 0 || r.tm === 1) totals[r.tm] += r.k;
+        for (const k in mp.bank) totals[mp.bank[k][0]] += mp.bank[k][1];`, `        for (const r of rows) if (r.tm === 0 || r.tm === 1) totals[r.tm] += r.k;`, 'the team scores at the end of a round');
+
   return html;
 }
 

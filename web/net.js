@@ -544,6 +544,20 @@
       .net-load .boot-bar { width: min(240px, 40vw); }
       html.net-scene .net-load { opacity: 0; }
       @media (max-width: 900px) { .net-load { display: none; } }
+      /* fullscreen, bottom right of the first screen (the loading line sits above it until the scene is up) */
+      .net-fs { position: fixed; right: max(var(--gr, 16px), 6vw); bottom: max(28px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px;
+        appearance: none; background: rgba(11,13,15,.6); border: 1px solid var(--line, rgba(232,228,218,.2)); border-radius: 2px; color: var(--bone, #e8e4da);
+        font: 600 14px/1 var(--f-label, sans-serif); letter-spacing: .12em; text-transform: uppercase; padding: 11px 14px; cursor: pointer;
+        transition: border-color .18s ease, background .18s ease, color .18s ease; }
+      .net-fs[hidden] { display: none; }
+      .net-fs svg { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: square; }
+      .net-fs:hover { border-color: var(--bone-dim, rgba(232,228,218,.64)); background: rgba(11,13,15,.8); }
+      .net-fs:active { color: var(--signal, #ffb347); border-color: var(--signal, #ffb347); }
+      .net-fs:focus-visible { outline: 2px solid var(--signal, #ffb347); outline-offset: 2px; }
+      .net-fs .exit { display: none; } .net-fs.on .exit { display: block; } .net-fs.on .enter { display: none; }
+      .net-load { bottom: calc(max(28px, env(safe-area-inset-bottom)) + 58px); }
+      @media (max-width: 640px) { .net-fs { right: var(--gr, 16px); bottom: max(16px, env(safe-area-inset-bottom)); } }
+      @media (prefers-reduced-motion: reduce) { .net-fs { transition: none; } }
       @media (prefers-reduced-motion: reduce) { #view, .net-load { transition: none; } }
       /* quick play has no room lobby: the first screen is home, so the game's title screen must never paint, not even for a frame */
       html.net-public #ui .m-title { visibility: hidden !important; }
@@ -575,10 +589,24 @@
         </div>
         <p class="net-status" role="status"></p>
       </div>
-      <div class="net-guns" hidden><span class="net-k">Gun</span><div data-net="guns"></div></div>`;
+      <div class="net-guns" hidden><span class="net-k">Gun</span><div data-net="guns"></div></div>
+      <button type="button" class="net-fs" aria-pressed="false"><svg class="enter" viewBox="0 0 16 16" aria-hidden="true"><path d="M1 5.5V1h4.5M10.5 1H15v4.5M15 10.5V15h-4.5M5.5 15H1v-4.5"/></svg><svg class="exit" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1v4.5H1M15 5.5h-4.5V1M10.5 15v-4.5H15M1 10.5h4.5V15"/></svg><span>Fullscreen</span></button>`;
     const $ = s => gate.querySelector(s);
     const nameIn = $('[data-net="name"]'), codeIn = $('[data-net="code"]'), roomForm = $('.net-room'), roomBtn = $('[data-net="room"]'), statusEl = $('.net-status');
-    const allBtns = () => [...gate.querySelectorAll('button')];
+    const allBtns = () => [...gate.querySelectorAll('button:not(.net-fs)')];
+    // fullscreen takes the whole page, so this screen stays on top of the game; the game's own Settings switch exits it the same way
+    const fsBtn = $('.net-fs'), fsLabel = fsBtn.querySelector('span'), fsRoot = document.documentElement;
+    const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+    if (!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen) || document.fullscreenEnabled === false || document.webkitFullscreenEnabled === false) fsBtn.hidden = true;
+    const fsShow = () => { const on = !!fsEl(); fsBtn.classList.toggle('on', on); fsBtn.setAttribute('aria-pressed', String(on)); fsLabel.textContent = on ? 'Exit fullscreen' : 'Fullscreen'; };
+    const fsFail = () => { fsLabel.textContent = 'Not available here'; setTimeout(fsShow, 2500); };
+    fsBtn.addEventListener('click', () => {
+      try {
+        if (fsEl()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+        const r = (fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen).call(fsRoot); if (r && r.catch) r.catch(fsFail);
+      } catch { fsFail(); }
+    });
+    for (const t of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(t, fsShow);
 
     new MutationObserver(() => { document.documentElement.classList.toggle('net-gate-open', !gate.hidden); showGuns(); }).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
     // the loading line: a copy of the game's own, shown until the scene is up (see .net-load above)
@@ -594,6 +622,7 @@
     /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
        whoever goes looking. Add a new entry at the top with each release. */
     const UPDATES = [
+      ['17 Nov 2026', ['Team play: a team\'s score is always the sum of its players on the board. Kills of players who left now show as their own row, and a player who reloads keeps their kills in one row', 'A fullscreen button at the bottom right of the first screen', 'Alpine: no more wind sound']],
       ['17 Nov 2026', ['Alpine: the middle house on the north side has a stair and an upper floor whose windows look over the street and the back lane', 'Smoke rises from the two burnt houses, signposts point to the piazza, the church and the well, and washing hangs over the alleys']],
       ['16 Nov 2026', ['A third map: Alpine, a war-ruined mountain village under the real Alps', 'Smoother on every map: about a third less work per frame on the harbour and the Colosseum', 'No more freezes the first time you fire, throw a grenade or see another player: everything is prepared while the game loads', 'Older graphics cards start on Medium; your own choice in Settings still wins']],
       ['17 Nov 2026', ['Alpine\'s houses rebuilt: blast holes, collapsed corners, burnt shells and holed roofs, and the solid parts are exactly where they are drawn', 'The Colosseum draws about a quarter fewer objects each frame, with nothing changed on screen', 'Fewer stutters the first time something happens in a match']],
