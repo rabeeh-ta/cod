@@ -1158,11 +1158,23 @@
       else if (a === 'join') joinFromRoom(-1);
       else if (a === 'back') back();
       else if (a === 'leave') location.assign('/');
-      else if (a === 'copy') {
-        const code = session.code;
-        (async () => { try { await navigator.clipboard.writeText(location.origin + '/r/' + code); b.textContent = 'Copied'; } catch { b.textContent = code; } setTimeout(() => { b.textContent = 'Copy invite'; }, 1600); })();
-      }
+      else if (a === 'copy') copyInvite(b, 'Copy invite');
     });
+    // the room's invite link to the clipboard; the button says so for a moment. Where the clipboard is refused, the button
+    // shows the link itself so it can be read out
+    function copyInvite(b, label) {
+      const link = location.origin + '/r/' + session.code;
+      const done = ok => { // the link as typed: no capitals, no letter spacing
+        b.textContent = ok ? 'Link copied' : link; b.style.textTransform = b.style.letterSpacing = ok ? '' : 'none';
+        setTimeout(() => { b.textContent = label; b.style.textTransform = b.style.letterSpacing = ''; }, ok ? 1600 : 6000);
+      };
+      const old = () => {
+        const t = document.createElement('textarea'); t.value = link; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+        document.body.appendChild(t); t.select(); let ok = false; try { ok = document.execCommand('copy'); } catch {} t.remove(); return ok;
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(() => done(true), () => done(old()));
+      else done(old());
+    }
     $('.fe-join').addEventListener('submit', ev => { ev.preventDefault(); joinRoom(); });
     for (const inp of [nameIn, codeIn]) for (const t of ['keydown', 'keyup']) inp.addEventListener(t, ev => { if (ev.key !== 'Escape') ev.stopPropagation(); }); // keep typing out of the game
     codeIn.addEventListener('input', () => { codeIn.value = codeIn.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); status(''); });
@@ -1264,6 +1276,15 @@
         const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.dataset.netMenu = '1'; b.textContent = 'Main menu';
         b.addEventListener('click', ev => { ev.stopPropagation(); location.assign('/'); });
         pauseActs.appendChild(b);
+      }
+      // a private room: its invite link from the pause menu, so friends can be brought in mid-match
+      const inviteActs = session.kind === 'private' && session.code && document.querySelector('#ui [data-s="paused"] .m-actions');
+      if (inviteActs && !inviteActs.querySelector('[data-net-invite]')) {
+        const label = 'Copy invite link · ' + session.code;
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.dataset.netInvite = '1'; b.textContent = label;
+        b.addEventListener('click', ev => { ev.stopPropagation(); copyInvite(b, label); });
+        const resume = inviteActs.querySelector('[data-act="resume"]');
+        if (resume) resume.after(b); else inviteActs.appendChild(b);
       }
       const room = document.querySelector('[data-net-room]');
       const roomText = session.code && session.kind !== 'dead' ? (session.kind === 'public' ? 'Open match' : 'Room ' + session.code) + ' · ' + maps.name(mapId()) : 'Online room';
