@@ -31,7 +31,7 @@ export function applyMapHooks(html) {
 
   // 1. the map scripts load before the game, so the choice is made by the time the game starts
   hook(/<script>\n(?=\(\(\)=>\{var \w+=Object\.defineProperty;)/,
-    () => '<script src="/maps/colosseum.js"></script>\n<script src="/maps.js"></script>\n<script>\n', 'the start of the game bundle');
+    () => '<script src="/maps/colosseum.js"></script>\n<script src="/maps/alpine.js"></script>\n<script src="/maps.js"></script>\n<script>\n', 'the start of the game bundle');
 
   // 2. boot: hand the constants to the map before anything reads them (it may move the sun, drop the sea, add a sound, ...)
   hook(/window\.__G=(\w+);/,
@@ -47,8 +47,9 @@ export function applyMapHooks(html) {
   hook(/for\(let\[(\w+),(\w+)\]of (\w+)\)\{let (\w+)=null,(\w+)=1e9;/,
     (m, a, b, list, c, d) => `for(let[${a},${b}]of(${LVL}.explosivesOnly?[]:${list})){let ${c}=null,${d}=1e9;`, 'the scattered barrels');
 
-  // 5. harbour sounds a map can switch off with level.ambience = { sea: 0, harbour: false }
+  // 5. harbour sounds a map can switch off with level.ambience = { sea: 0, harbour: false }, and the rain with rain: 0
   hook(/(\w+)\.sea\.setGain\(/, (m, v) => `${v}.sea.setGain((${LVL}.ambience?${LVL}.ambience.sea:1)*`, 'the sea loop');
+  for (const one of ['rain', 'rainIn']) hook(new RegExp(`(\\w+)\\.${one}\\.setGain\\(`), (m, v) => `${v}.${one}.setGain((${LVL}.ambience&&${LVL}.ambience.rain!=null?${LVL}.ambience.rain:1)*`, `the ${one} loop`);
   for (const one of ['foghorn', 'container_bang']) {
     hook(new RegExp(`(\\w+)\\("${one}",\\{`), (m, play) => `(${LVL}.ambience&&${LVL}.ambience.harbour===!1?()=>{}:${play})("${one}",{`, `the ${one} sound`);
   }

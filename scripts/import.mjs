@@ -17,6 +17,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyMapHooks } from './map-hooks.mjs';
 import { applyGunHooks } from './gun-hooks.mjs';
+import { applyPerfHooks } from './perf-hooks.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const src = resolve(process.cwd(), process.argv[2] || 'COD.html');
@@ -46,6 +47,7 @@ once("const kn = knife.on ? 'Rifle' : 'Knife'; if (knifeName.textContent !== kn)
   "const knifeLabel = knife.on ? 'Rifle' : 'Knife'; if (knifeName.textContent !== knifeLabel) knifeName.textContent = knifeLabel;", 'the knife label in the HUD');
 html = applyMapHooks(html);
 html = applyGunHooks(html);
+html = applyPerfHooks(html);
 
 const leftover = html.match(/blend-ed|felix|claude\.ai\/artifact/gi);
 if (leftover) throw new Error(`import: personal references left in the game: ${[...new Set(leftover)].join(', ')}`);

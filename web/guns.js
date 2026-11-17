@@ -776,6 +776,21 @@
       box(olive, 0.28, 0.18, 0.15, x, y, z, yaw); box(dark, 0.29, 0.02, 0.16, x, y + 0.18, z, yaw); box(dark, 0.1, 0.012, 0.02, x, y + 0.2, z, yaw);
     }
     for (const o of g.children) o.position.z -= 0.16;                                                                   // the cans stand at the back
+    // the nine boxes in two meshes, one per material: two draws where there were nine, nothing different to see
+    for (const m of [olive, dark]) {
+      const parts = g.children.filter(o => o.isMesh && o.material === m); if (parts.length < 2) continue;
+      let nv = 0, ni = 0; for (const o of parts) { o.updateMatrix(); nv += o.geometry.attributes.position.count; ni += o.geometry.index.count; }
+      const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), idx = new Uint16Array(ni), v = new T.Vector3(), nm = new T.Matrix3();
+      let vo = 0, io = 0;
+      for (const o of parts) {
+        const ge = o.geometry, P = ge.attributes.position, N = ge.attributes.normal, U = ge.attributes.uv; nm.getNormalMatrix(o.matrix);
+        for (let k = 0; k < P.count; k++) { v.fromBufferAttribute(P, k).applyMatrix4(o.matrix); pos.set([v.x, v.y, v.z], (vo + k) * 3); v.fromBufferAttribute(N, k).applyMatrix3(nm).normalize(); nor.set([v.x, v.y, v.z], (vo + k) * 3); uv[(vo + k) * 2] = U.getX(k); uv[(vo + k) * 2 + 1] = U.getY(k); }
+        for (let k = 0; k < ge.index.count; k++) idx[io++] = ge.index.getX(k) + vo;
+        vo += P.count; g.remove(o); ge.dispose();
+      }
+      const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('normal', new T.BufferAttribute(nor, 3)); geo.setAttribute('uv', new T.BufferAttribute(uv, 2)); geo.setIndex(new T.BufferAttribute(idx, 1)); geo.computeBoundingSphere();
+      const one = new T.Mesh(geo, m); one.castShadow = one.receiveShadow = true; g.add(one);
+    }
     // in front of them, the loose rounds: the model in web/guns/ammo.* (six kinds of cartridge), when it has arrived
     load('ammo').then(a => {
       if (!a) return;

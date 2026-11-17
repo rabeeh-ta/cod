@@ -8,7 +8,7 @@ The first screen has three ways to play:
 - **Room**: private. Create a room to get a 6-character code and invite link (`/r/ABC123`), or join one with a code. Inside the room you pick Deathmatch or Team play (Gate vs Quay). Up to 10 players.
 - **Solo**: the single-player mission.
 
-Above them is the **Map** picker: **Saltline Terminal** (the harbour) or **Colosseum** (the arena of the Colosseum under restoration, an hour after a storm). Quick play matches you with players on the same map, a room keeps the map it was made with, and a room link loads that room's map for whoever opens it. Solo is set in the harbour.
+Above them is the **Map** picker: **Saltline Terminal** (the harbour), **Colosseum** (the arena of the Colosseum under restoration, an hour after a storm) or **Alpine** (a war-ruined mountain village on a clear morning, with the Alps all round). Quick play matches you with players on the same map, a room keeps the map it was made with, and a room link loads that room's map for whoever opens it. Solo is set in the harbour.
 
 Voice chat works in every online match. Press **V** (or the MIC button on touch) to talk. You hear the players in your match, and in Team play only your own team. **Settings → Voice chat volume** sets how loud other players are, from 0 to 400% (200% to start).
 
@@ -51,6 +51,7 @@ See [CLAUDE.md](CLAUDE.md) for the Cloudflare stack.
 | Network adapter | `web/net.js` | Stands in for the claude.ai runtime the game was written for, plus the first screen and voice (WebRTC, peer to peer) |
 | Map choice | `web/maps.js` | Decides which map this page load builds (a link, the room, or the player's last pick) before the game starts |
 | Colosseum | `web/maps/colosseum.js` | The second map: stonework, cover, light and collision, built in code when it is picked |
+| Alpine | `web/maps/alpine.js`, `web/maps/alpine/` | The third map: a war-ruined village. Its houses are built the way Valle Morta builds them (walls as a grid of cells that blasts and collapses take away), and every wall cell a player can reach is also a collision box; roofs and other high parts stop shots as the triangles they are drawn with. Its textures and the 360° photograph of the valley are in the folder |
 | Worker | `src/worker.js` | `/api/*` routes |
 | `Room` Durable Object | `src/worker.js` | One per room code. Holds up to 10 WebSockets, relays player state, relays voice-call setup. Deletes itself 30 min after it empties |
 | `Matchmaker` Durable Object | `src/worker.js` | One per continent. Tracks public rooms and fills the fullest open one first |
@@ -60,6 +61,7 @@ See [CLAUDE.md](CLAUDE.md) for the Cloudflare stack.
 | Guns | `web/guns.js`, `web/guns/` | The shotgun and the sniper rifle: models, handling, shots, reloads, sounds and the scope; the three gun cards (the model turning, its numbers, its name) on the first screen, on the card shown when down, and on **B** in a match, where the pick is for the next life; the protected seconds after a respawn |
 | Gun models | `scripts/gun-assets.mjs` | Turns a downloaded `.glb` into the small files in `web/guns/` (run once per model, on macOS) |
 | Gun hooks | `scripts/gun-hooks.mjs` | The patches that let more guns into the game and change what a respawn does; the import runs them |
+| Performance hooks | `scripts/perf-hooks.mjs`, `web/perf.js` | What keeps the game smooth on modest hardware, learnt from Valle Morta: no multisampling at Medium and High (the game's own smoothing pass does the edges), the mirror pass for puddles only at Ultra, the world drawn at the window's size rather than the screen's pixel density below Ultra, a warm-up during loading that prepares every shader and picture so first shots, grenades and players do not freeze the game, and older graphics cards starting on Medium; the import runs the hooks |
 
 ## Credits
 
@@ -68,6 +70,11 @@ The gun and ammunition models come from Sketchfab and are used under their Creat
 - Shotgun: "Simple old shotgun" by SuperMopsek, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), https://sketchfab.com/3d-models/simple-old-shotgun-e20d1457bf8b49d8ade324690de27b4b. Textures resized, the pump and stock separated.
 - Ammunition: "Ammo Set" by Guy in a Poncho, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), https://sketchfab.com/3d-models/ammo-set-31b78afb6f544b0386d02be2d7aad5d8. Textures resized, scaled up.
 - Sniper rifle: "SV-98 | Contract Wars" by xlisov, [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/), https://sketchfab.com/3d-models/sv-98-contract-wars-130bd9dd144a4da2971d148dd0098492. One of the two rifles in the file is used; the bolt and magazine separated. Non-commercial use only.
+
+The Alpine map uses work by others:
+
+- Wall, roof, cobble, turf, earth, rubble, wood and bark textures: from [Valle Morta](https://github.com/Leonxlnx/valle-morta) by Leonxlnx, MIT licence (`web/maps/alpine/tex/LICENSE.txt`). Resized and recompressed. The grass (tufts of crossed cards, each a painting of many blades) follows its method, and the blade-painting code is adapted from it.
+- The valley and sky: "Alps Field" by Andreas Mischok, [polyhaven.com/a/alps_field](https://polyhaven.com/a/alps_field), CC0. Cut into a horizon strip and a small whole-sky picture.
 
 ## Known limits
 

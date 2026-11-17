@@ -1987,8 +1987,37 @@ void main(){
         else tryAt((seeded() * 2 - 1) * (A - 3), (seeded() * 2 - 1) * (B - 2.5), r);
       }
     }
-    // merge what the game's props are made of into one mesh per material
+    /* The containers' and plant's labels were each a picture of their own, and so each a draw of its own (31 of them).
+       Laid side by side on one sheet they are one draw, pixel for pixel the same: every label keeps its own pixels and
+       is mipmapped as before, with its edges carried out into a margin round it as the clamped picture's edges were. */
     staticRoot.updateMatrixWorld(true);
+    {
+      const labels = [];
+      staticRoot.traverse(m => { const mt = m.isMesh && !Array.isArray(m.material) && !m.isInstancedMesh && !m.isSkinnedMesh && m.material; if (mt && mt.name === 'label' && mt.map && mt.map.image && mt.map.image.width && mt.map.flipY) labels.push(m); });
+      const PAD = 8, SW = 2048; let x = 0, y = 0, rowH = 0; const spots = [];
+      for (const m of labels) { const im = m.material.map.image, w = im.width + 2 * PAD, h = im.height + 2 * PAD; if (x + w > SW) { x = 0; y += rowH; rowH = 0; } spots.push([x + PAD, y + PAD, im.width, im.height]); x += w; rowH = Math.max(rowH, h); }
+      const SH = y + rowH, uvOk = m => { const uv = m.geometry.attributes.uv; if (!uv) return false; for (let k = 0; k < uv.count; k++) { const u = uv.getX(k), v = uv.getY(k); if (u < -1e-4 || u > 1 + 1e-4 || v < -1e-4 || v > 1 + 1e-4) return false; } return true; };
+      if (labels.length > 1 && SH <= 2048 && labels.every(uvOk)) {
+        const cv = document.createElement('canvas'); cv.width = SW; cv.height = SH; const c = cv.getContext('2d');
+        labels.forEach((m, i) => {
+          const im = m.material.map.image, [sx, sy, w, h] = spots[i];
+          c.drawImage(im, 0, 0, 1, h, sx - PAD, sy, PAD, h); c.drawImage(im, w - 1, 0, 1, h, sx + w, sy, PAD, h); c.drawImage(im, 0, 0, w, 1, sx, sy - PAD, w, PAD); c.drawImage(im, 0, h - 1, w, 1, sx, sy + h, w, PAD);
+          for (const [ix, iy, ox, oy] of [[0, 0, -PAD, -PAD], [w - 1, 0, w, -PAD], [0, h - 1, -PAD, h], [w - 1, h - 1, w, h]]) c.drawImage(im, ix, iy, 1, 1, sx + ox, sy + oy, PAD, PAD);
+          c.drawImage(im, sx, sy);
+        });
+        const t0 = labels[0].material.map, sheet = new T.CanvasTexture(cv), mat = labels[0].material;
+        sheet.colorSpace = t0.colorSpace; sheet.anisotropy = t0.anisotropy; sheet.flipY = t0.flipY; sheet.wrapS = sheet.wrapT = T.ClampToEdgeWrapping; sheet.minFilter = t0.minFilter; sheet.magFilter = t0.magFilter; sheet.name = 'col_labels';
+        const old = new Set(labels.map(m => m.material));
+        labels.forEach((m, i) => {
+          const [sx, sy, w, h] = spots[i], geo = m.geometry.clone(), uv = geo.attributes.uv;
+          for (let k = 0; k < uv.count; k++) uv.setXY(k, (sx + uv.getX(k) * w) / SW, 1 - (sy + (1 - uv.getY(k)) * h) / SH);
+          m.geometry = geo; m.material = mat;
+        });
+        for (const o of old) { o.map.dispose(); if (o !== mat) o.dispose(); }
+        mat.map = sheet; mat.needsUpdate = true;
+      }
+    }
+    // merge what the game's props are made of into one mesh per material
     const groups = new Map(), merged = new T.Group(), kept = []; merged.name = 'col-props';
     let tris = 0;
     staticRoot.traverse(m => {
@@ -2230,7 +2259,19 @@ void main(){
   /* ------------------------------------------------------------------ meshes from the builder */
   function toMeshes(G, bld, mats, root) {
     const T = G.THREE; let tris = 0, meshes = 0;
-    for (const b of bld.buckets.values()) {
+    /* The ring is cut into quarters so that what is behind the camera is not drawn. For a material with little of it
+       in any quarter (iron fittings, bronze, gilt letters) that saves no work and costs a draw per quarter: those are
+       put back together into one mesh. The big ones (stone, marble, sand) stay cut. */
+    const SMALL = 6000, byMat = new Map(), list = [];
+    for (const b of bld.buckets.values()) { if (!b.nv) continue; const k = b.mat + '|' + b.shadow; if (!byMat.has(k)) byMat.set(k, []); byMat.get(k).push(b); }
+    for (const bs of byMat.values()) {
+      const n = bs.reduce((s0, b) => s0 + b.i.length / 3, 0);
+      if (bs.length < 2 || n >= SMALL) { list.push(...bs); continue; }
+      const one = { mat: bs[0].mat, sector: 'all', shadow: bs[0].shadow, p: [], n: [], u: [], c: [], i: [], nv: 0 };
+      for (const b of bs) { for (const v of b.i) one.i.push(v + one.nv); one.p.push(...b.p); one.n.push(...b.n); one.u.push(...b.u); one.c.push(...b.c); one.nv += b.nv; }
+      list.push(one);
+    }
+    for (const b of list) {
       if (!b.nv) continue;
       const g = new T.BufferGeometry();
       g.setAttribute('position', new T.Float32BufferAttribute(b.p, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(b.n, 3));

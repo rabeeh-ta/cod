@@ -594,6 +594,8 @@
     /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
        whoever goes looking. Add a new entry at the top with each release. */
     const UPDATES = [
+      ['16 Nov 2026', ['A third map: Alpine, a war-ruined mountain village under the real Alps', 'Smoother on every map: about a third less work per frame on the harbour and the Colosseum', 'No more freezes the first time you fire, throw a grenade or see another player: everything is prepared while the game loads', 'Older graphics cards start on Medium; your own choice in Settings still wins']],
+      ['17 Nov 2026', ['Alpine\'s houses rebuilt: blast holes, collapsed corners, burnt shells and holed roofs, and the solid parts are exactly where they are drawn', 'The Colosseum draws about a quarter fewer objects each frame, with nothing changed on screen', 'Fewer stutters the first time something happens in a match']],
       ['16 Nov 2026', ['A used grenade comes back after 30 seconds, down from two minutes']],
       ['16 Nov 2026', ['A shot at the head of a player who is peeking now counts']],
       ['16 Nov 2026', ['Music has its own volume in Settings, and starts at half', 'Every life starts with its grenades again']],
@@ -603,7 +605,7 @@
       ['16 Nov 2026', ['A second map: the Colosseum, with a map choice on the first screen', 'The minimap and grenade markers draw again', 'The first screen stays dark with a loading line until the map is ready']],
       ['13 Nov 2026', ['A new round restarts every player: position, health and ammo', 'Louder voice chat with its own volume setting, and louder enemy footsteps']],
     ];
-    const CREDITS = 'Shotgun: "Simple old shotgun" by SuperMopsek (CC BY 4.0). Sniper rifle: "SV-98 | Contract Wars" by xlisov (CC BY-NC 4.0). Ammunition: "Ammo Set" by Guy in a Poncho (CC BY 4.0). All from sketchfab.com.';
+    const CREDITS = 'Shotgun: "Simple old shotgun" by SuperMopsek (CC BY 4.0). Sniper rifle: "SV-98 | Contract Wars" by xlisov (CC BY-NC 4.0). Ammunition: "Ammo Set" by Guy in a Poncho (CC BY 4.0). All from sketchfab.com. Alpine: wall, roof and ground textures, and the way the grass is drawn, from Valle Morta by Leonxlnx (MIT); the valley is "Alps Field" by Andreas Mischok, polyhaven.com (CC0).';
     const logCss = document.createElement('style');
     logCss.textContent = `.net-log { margin-top: 26px; border-top: 1px solid var(--line, rgba(232,228,218,.2)); padding-top: 12px; }
       .net-log summary { cursor: pointer; font: 500 11px/1 var(--f-mono, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--bone-faint, rgba(232,228,218,.4)); list-style: none; }
@@ -642,7 +644,7 @@
     /* Maps. The game builds one map per page load (see web/maps.js), so picking another reloads the page into it.
        Quick play and new rooms use the map on screen; a room keeps its map, and joining one loads that map first. */
     const maps = window.__saltlineMaps || { list: [{ id: 'terminal', name: 'Saltline Terminal' }], id: 'terminal', ready: Promise.resolve('terminal'), name: () => 'Saltline Terminal', choose: () => false };
-    const mapId = () => maps.id, loadingText = () => (mapId() === 'terminal' ? 'Loading the yard…' : 'Loading the arena…');   // a room link learns its map a moment after the page starts, so always ask
+    const mapId = () => maps.id, loadingText = () => ({ terminal: 'Loading the yard…', alpine: 'Loading the village…' }[mapId()] || 'Loading the arena…');   // a room link learns its map a moment after the page starts, so always ask
     const post = path => fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ map: mapId() }) });
     // reload into a map (and a path) without changing the one the player has chosen as theirs
     const visit = (id, path) => maps.choose(id, path, false) || (location.assign(path), true);
