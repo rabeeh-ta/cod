@@ -594,6 +594,7 @@
     /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
        whoever goes looking. Add a new entry at the top with each release. */
     const UPDATES = [
+      ['17 Nov 2026', ['Alpine: the middle house on the north side has a stair and an upper floor whose windows look over the street and the back lane', 'Smoke rises from the two burnt houses, signposts point to the piazza, the church and the well, and washing hangs over the alleys']],
       ['16 Nov 2026', ['A third map: Alpine, a war-ruined mountain village under the real Alps', 'Smoother on every map: about a third less work per frame on the harbour and the Colosseum', 'No more freezes the first time you fire, throw a grenade or see another player: everything is prepared while the game loads', 'Older graphics cards start on Medium; your own choice in Settings still wins']],
       ['17 Nov 2026', ['Alpine\'s houses rebuilt: blast holes, collapsed corners, burnt shells and holed roofs, and the solid parts are exactly where they are drawn', 'The Colosseum draws about a quarter fewer objects each frame, with nothing changed on screen', 'Fewer stutters the first time something happens in a match']],
       ['16 Nov 2026', ['A used grenade comes back after 30 seconds, down from two minutes']],

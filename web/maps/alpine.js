@@ -54,7 +54,7 @@
     // north of the street
     { id: 'n1', at: [-33, 4, -22, 13], floors: 3, ridge: 'x', kind: 'sealed', tint: [1.12, 0.98, 0.74], quoins: true, roof: 'holed', roofHoles: [[-25.8, 6.6, 1.7]], damage: { blasts: [[-25.6, 7.4, 4, 1.25]] } },
     { id: 'n2', at: [-19, 4, -8, 13], floors: 2, ridge: 'x', kind: 'ruin', tint: [1.06, 1.0, 0.9], seed: 11, roof: 'none', damage: { collapse: { x: -13, z: 4, depth: 7.4, sigma: 3.0 }, rag: 0.8, blasts: [[-17.2, 1.6, 13.2, 1.5]], burnt: 0.45 } },
-    { id: 'n3', at: [-5, 4, 7, 13], floors: 2, ridge: 'x', kind: 'open', tint: [1.14, 0.92, 0.82], balcony: 's', quoins: true, roof: 'holed', roofHoles: [[5.2, 10.6, 1.5]], damage: { blasts: [[7, 4.6, 10.2, 1.2]] } },
+    { id: 'n3', at: [-5, 4, 7, 13], floors: 2, ridge: 'x', kind: 'open', tint: [1.14, 0.92, 0.82], balcony: 's', quoins: true, roof: 'holed', roofHoles: [[5.2, 10.6, 1.5]], upstairs: true, noWin: ['w0', 'w1'] },
     { id: 'n4', at: [10, 4, 21, 13], floors: 2, ridge: 'x', kind: 'ruin', tint: [0.96, 0.95, 0.93], seed: 23, stone: true, roof: 'skeleton', floor: true, damage: { top: 6.6, rag: 0.7, blasts: [[14.2, 1.2, 4, 1.55], [21, 4.6, 7.6, 1.6]], burnt: 0.9 } },
     // south of the street
     { id: 's1', at: [-34, -13, -23, -4], floors: 2, ridge: 'x', kind: 'sealed', tint: [1.05, 1.03, 0.92], quoins: true, roof: 'holed', roofHoles: [[-25.8, -6.6, 1.4], [-31.6, -10.6, 1.0]], damage: { blasts: [[-28.2, 4.7, -4, 1.1]] } },
@@ -383,7 +383,7 @@
        reveal, and in it shutters, glass or a door, as the house's fate has left them. Only an opening the wall still
        stands round is dressed; one the damage has broken into is a breach. */
     function dressOpening(g, h, c) {
-      const { axis, side, at, kind, ruin, paint, r, soot } = c, out = side === 'n' || side === 'w' ? -1 : 1, face = out < 0 ? at : at + WALL, back = out < 0 ? at + WALL : at;
+      const { axis, side, at, kind, ruin, paint, r, soot, upstairs } = c, out = side === 'n' || side === 'w' ? -1 : 1, face = out < 0 ? at : at + WALL, back = out < 0 ? at + WALL : at;
       const yM = (h.v0 + h.v1) / 2, um = (h.u0 + h.u1) / 2;
       const whole = g.cellAt(h.u0 - 0.25, yM) === WALLc && g.cellAt(h.u1 + 0.25, yM) === WALLc && (h.v0 < 0.01 || g.cellAt(um, h.v0 - 0.05) === WALLc) && g.cellAt(um, h.v1 + 0.05) === WALLc;
       if (!whole) return;
@@ -413,9 +413,9 @@
         return;
       }
       if (h.church) return;
-      const w2 = (h.u1 - h.u0) / 2, state = ruin ? (high && r() < 0.35 ? 'hanging' : r() < 0.3 && !high ? 'flat' : 'none') : kind === 'sealed' && !high ? 'closed' : !high ? 'flat' : ['closed', 'angled', 'angled', 'flat'][Math.floor(r() * 4)];
+      const w2 = (h.u1 - h.u0) / 2, state = upstairs && high ? 'flat' : ruin ? (high && r() < 0.35 ? 'hanging' : r() < 0.3 && !high ? 'flat' : 'none') : kind === 'sealed' && !high ? 'closed' : !high ? 'flat' : ['closed', 'angled', 'angled', 'flat'][Math.floor(r() * 4)];
       // glass, in a window that still has its frame and is not shuttered
-      if (!ruin && state !== 'closed' && high) {
+      if (!ruin && state !== 'closed' && high && !upstairs) {
         B(deco, 'glass', h.u0 + 0.07, h.v0 + 0.06, f0 - out * 0.03, h.u1 - 0.07, h.v1 - 0.07, f0 - out * 0.05, { flat: true, tint: [1, 1, 1] });
         B(deco, 'wood', um - 0.03, h.v0 + 0.06, f0 - out * 0.02, um + 0.03, h.v1 - 0.07, f0 - out * 0.07, wd);
         B(deco, 'wood', h.u0 + 0.07, yM + 0.1, f0 - out * 0.02, h.u1 - 0.07, yM + 0.16, f0 - out * 0.07, wd);
@@ -541,13 +541,13 @@
           const cu = Math.round((a + (i + 0.5) * step) / CELL) * CELL;
           if (spec.id === 'tower') { if (i === Math.floor(bays / 2)) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: H - 4.4, v1: H - 1.6, kind: 'belfry', arch: true }); continue; }
           if (spec.church) { if (i === doorBay) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: 0, v1: 3.0, kind: 'door', arch: true, church: true }); else if (long) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: 3.4, v1: 6.2, kind: 'win', arch: true, church: true }); continue; }
-          holes.push(i === doorBay ? { u0: cu - 0.5, u1: cu + 0.5, v0: 0, v1: 2.1, kind: 'door' } : { u0: cu - 0.5, u1: cu + 0.5, v0: 1.0, v1: 2.2, kind: 'win' });
+          if (!(spec.noWin && spec.noWin.includes(side + i))) holes.push(i === doorBay ? { u0: cu - 0.5, u1: cu + 0.5, v0: 0, v1: 2.1, kind: 'door' } : { u0: cu - 0.5, u1: cu + 0.5, v0: 1.0, v1: 2.2, kind: 'win' });
           for (let f = 1; f < floors; f++) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: levels[f] + 0.9, v1: levels[f] + 2.1, kind: 'win', up: true });
         }
         const gable = !long && (rk === 'none' || rk === 'skeleton') && spec.ridge !== 'spire' ? { mid, half: halfIn, rise: halfIn * 0.5 + 0.14 } : null;
         const g = gridWall({ axis, a, b, at, H, gable, holes, field, low: ruin, mat, tint, soot, innerSide, breaks: levels });
         walls.push({ g, axis, a, b, at, side, long, holes });
-        for (const h of holes) dressOpening(g, h, { axis, side, at, kind, ruin, paint, r, soot });
+        for (const h of holes) dressOpening(g, h, { axis, side, at, kind, ruin, paint, r, soot, upstairs: !!spec.upstairs });
       }
       // stone quoins at the corners, where the corner still stands
       if (spec.quoins) for (const [cx, cz, sxn, szn, wi] of [[x0, z0, 1, 1, 0], [x1, z0, -1, 1, 0], [x0, z1, 1, -1, 1], [x1, z1, -1, -1, 1]]) {
@@ -573,7 +573,18 @@
       }
       // inside: floors and ceilings where there are storeys
       const ix0 = x0 + WALL, ix1 = x1 - WALL, iz0 = z0 + WALL, iz1 = z1 - WALL;
-      if (!ruin && !spec.church && spec.id !== 'tower') {
+      if (spec.upstairs) {
+        /* A house to fight from: a stair against its blind west wall, the upper floor open over it, and a room whose
+           windows look over the street and the back lane. The windows can be shot through but not climbed through.
+           Up here the same rule holds as below, measured from this floor: nothing to stand on within reach above it
+           (no handrail: it was a step to the window heads and from there to the roofs). */
+        const sx0 = ix0, sx1 = ix0 + 0.95, sz0 = iz0 + 0.7, run = 0.3, rise = 0.25, n = Math.round(F1 / rise), sz1 = sz0 + n * run, fl = { tint: [0.62, 0.56, 0.5] };
+        for (let k = 0; k < n; k++) solid('wood', sx0, 0, sz0 + k * run, sx1, rise * (k + 1), sz0 + (k + 1) * run, { tint: k % 2 ? [0.7, 0.63, 0.55] : [0.64, 0.58, 0.51] });
+        solid('wood', ix0, F1 - 0.22, iz0, sx1, F1, sz0, fl); solid('wood', ix0, F1 - 0.22, sz1, sx1, F1, iz1, fl); solid('wood', sx1, F1 - 0.22, iz0, ix1, F1, iz1, fl);
+        for (let x = ix0 + 0.7; x < ix1 - 0.4; x += 1.4) solid('wood', x, F1 - 0.4, x < sx1 + 0.1 ? sz1 : iz0, x + 0.16, F1 - 0.22, iz1, { tint: [0.56, 0.5, 0.44] });
+        solid('wood', ix0, H - 0.06, iz0, ix1, H, iz1, { tint: [0.5, 0.46, 0.42], faces: 'b' });
+        for (const w of walls) for (const h of w.holes) if (h.up) ph.addBox(w.axis === 'x' ? [h.u0, h.v0, w.at] : [w.at, h.v0, h.u0], w.axis === 'x' ? [h.u1, h.v1, w.at + WALL] : [w.at + WALL, h.v1, h.u1], { surface: 'glass', playerOnly: true });
+      } else if (!ruin && !spec.church && spec.id !== 'tower') {
         for (let f = 1; f < floors; f++) solid('wood', ix0, levels[f] - 0.22, iz0, ix1, levels[f], iz1, { tint: [0.62, 0.56, 0.5], faces: 'tb' });
         if (rk === 'intact' || rk === 'holed') deco('wood', ix0, H - 0.04, iz0, ix1, H, iz1, { tint: [0.5, 0.46, 0.42], faces: 'b' });
         for (let x = ix0 + 0.7; x < ix1 - 0.4; x += 1.4) solid('wood', x, F1 - 0.4, iz0, x + 0.16, F1 - 0.22, iz1, { tint: [0.56, 0.5, 0.44] });
@@ -689,6 +700,20 @@
     // lamp posts
     for (const [x, z] of [[-25, 3.2], [-9, -3.2], [9, 3.2], [22, -3.2], [-18, 13.9], [3, 17.3]]) { solid('iron', x - 0.06, 0, z - 0.06, x + 0.06, 3.4, z + 0.06, { flat: true, tint: [0.5, 0.48, 0.46] }); thin('iron', x - 0.06, 3.3, z - 0.06, x + 0.7, 3.38, z + 0.06, { flat: true, tint: [0.5, 0.48, 0.46] }); thin('rust', x + 0.5, 2.95, z - 0.14, x + 0.78, 3.3, z + 0.14, { flat: true, tint: [0.7, 0.62, 0.55] }); }
 
+    /* ---- signposts at the junctions: where the piazza, the church and the well are. The post is tall enough that
+       its top is out of reach; the boards stop shots only */
+    const SIGNS = [];
+    for (const [x, z, boards] of [[-31, 3.75, [['PIAZZA', 'x', 1], ['CHIESA', 'x', 1]]], [-6.5, 3.75, [['POZZO', 'z', -1], ['PIAZZA', 'x', 1]]], [19.8, 3.75, [['CHIESA', 'z', -1], ['PIAZZA', 'x', 1]]], [-6.5, 13.85, [['STRADA', 'z', -1], ['CHIESA', 'x', 1]]]]) {
+      solid('wood', x - 0.06, 0, z - 0.06, x + 0.06, 3.4, z + 0.06, { tint: [0.5, 0.44, 0.38] });
+      boards.forEach(([word, ax, dir], i) => SIGNS.push({ x, z, word, ax, dir, y: 2.55 - i * 0.42 }));
+    }
+    for (const sg of SIGNS) {
+      const L = 1.05, a0 = sg.dir > 0 ? 0.07 : -0.07 - L, a1 = sg.dir > 0 ? 0.07 + L : -0.07, y0 = sg.y - 0.15, y1 = sg.y + 0.15;
+      if (sg.ax === 'x') solid('wood', sg.x + a0, y0, sg.z - 0.025, sg.x + a1, y1, sg.z + 0.025, { tint: [0.42, 0.33, 0.25], only: 'shots', faces: 'webt' }); else solid('wood', sg.x - 0.025, y0, sg.z + a0, sg.x + 0.025, y1, sg.z + a1, { tint: [0.42, 0.33, 0.25], only: 'shots', faces: 'nsbt' });
+    }
+    /* ---- washing lines between the houses, out of reach over the alleys and the street; the clothes move in the wind */
+    const LINES = [[[-8, 4.6, 6.2], [-5, 4.6, 6.2]], [[-8, 4.5, 10.4], [-5, 4.5, 10.4]], [[7, 4.6, 7.2], [10, 4.6, 7.2]], [[7, 4.4, 11.2], [10, 4.4, 11.2]], [[-29.6, 5.3, 4], [-29.6, 5.3, -4]], [[-25.8, 5.1, 4], [-25.8, 5.1, -4]]];
+    for (const [p, q] of LINES) { const m = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2 - 0.3, (p[2] + q[2]) / 2]; beamPQ('wood', p, m, 0.015, 0.015, { tint: [0.6, 0.6, 0.6], hi: false }); beamPQ('wood', m, q, 0.015, 0.015, { tint: [0.6, 0.6, 0.6], hi: false }); }
     /* ---- trees on the green and in the gardens: a trunk you can stand behind, and a crown of leaves (which stops nothing) */
     const trees = [[-7, -20, 1.0], [5, -10, 1.15], [-4, -23.5, 0.85], [-30, 21, 1.0], [-33.5, 9.5, 0.8]];
     for (const [x, z, s] of trees) solid('bark', x - 0.22 * s, 0, z - 0.22 * s, x + 0.22 * s, Math.max(3.5, 3.7 * s), z + 0.22 * s, { tint: [1, 0.96, 0.9] });
@@ -697,7 +722,7 @@
     /* ---- where a new life begins: on open ground, all round the village */
     for (const [x, z] of [[-34, 0], [-34.5, 15.5], [-30, -22], [-21.5, 8], [-21.5, -16], [-27, 15.8], [-14, 15.6], [-6.5, 15.6], [-6.5, 8], [1, 15.6], [8.5, 8], [14, 15.6], [26.2, 15.4], [25, 9], [24.5, 0], [24, -9], [21.5, -14.5],
       [8.6, -8], [3, -18], [-6, -11], [-9, -24], [-16.5, -16], [-21.5, -5], [-14, -2.2], [-3, -1.8], [12, 2.2]]) spawns.push([x, z]);
-    return { HI, spawns, placed, trees, draw, solid };
+    return { HI, spawns, placed, trees, draw, solid, SIGNS, LINES };
   }
 
   /* ------------------------------------------------------------------ the ground: cobbles, earth and turf, and the heaps of rubble */
@@ -841,6 +866,69 @@
     const sm = new T.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
     for (const [x, z, s] of built.trees) { const b = new T.Mesh(new T.IcosahedronGeometry(2.1 * s, 1), sm); b.position.set(x, Math.max(3.5, 3.7 * s) + 0.9, z); b.castShadow = true; b.matrixAutoUpdate = false; b.updateMatrix(); root.add(b); }
     return { tris: I.length / 3 + grass.tris, grass: grass.tris, update(t) { time.value = t; grass.time.value = t; } };
+  }
+
+  /* ------------------------------------------------------------------ what moves, and what is painted
+     The words on the signposts (one painted sheet), the clothes on the washing lines (they move in the wind), and the
+     smoke that still rises from the two burnt houses: a column seen from anywhere in the village, to find one's way by. */
+  function buildExtras(G, built, root) {
+    const T = G.THREE, r = rng(3131), parts = [];
+    // the words: white paint on dark boards, both faces
+    const words = [...new Set(built.SIGNS.map(s => s.word))], cv = document.createElement('canvas'); cv.width = 512; cv.height = 64 * words.length;
+    const c = cv.getContext('2d'); c.fillStyle = '#5a4634'; c.fillRect(0, 0, cv.width, cv.height);
+    c.font = '700 40px Georgia, "Times New Roman", serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    words.forEach((w, i) => { c.fillStyle = 'rgba(30,20,12,0.5)'; c.fillRect(6, i * 64 + 6, 500, 52); c.fillStyle = '#efe6d2'; c.fillText(w, 256, i * 64 + 34); });
+    const tex = new T.CanvasTexture(cv); tex.colorSpace = T.SRGBColorSpace; tex.anisotropy = 8;
+    const P = [], U = [], N = [], I = [];
+    for (const sg of built.SIGNS) {
+      const k = words.indexOf(sg.word), L = 1.05, a0 = sg.dir > 0 ? 0.07 : -0.07 - L, a1 = sg.dir > 0 ? 0.07 + L : -0.07, y0 = sg.y - 0.14, y1 = sg.y + 0.14, v0 = 1 - (k * 64 + 60) / cv.height, v1 = 1 - (k * 64 + 4) / cv.height;
+      for (const side of [-1, 1]) {
+        const off = 0.027 * side, at = (a, y) => (sg.ax === 'x' ? [sg.x + a, y, sg.z + off] : [sg.x + off, y, sg.z + a]), base = P.length / 3;
+        // read left to right from either side
+        const flip = (sg.ax === 'x') === (side > 0) ? 0 : 1, ua = flip ? 1 : 0, ub = flip ? 0 : 1;
+        for (const [a, y, u, v] of [[a0, y0, ua, v0], [a1, y0, ub, v0], [a1, y1, ub, v1], [a0, y1, ua, v1]]) { P.push(...at(a, y)); U.push(u, v); N.push(sg.ax === 'x' ? 0 : side, 0, sg.ax === 'x' ? side : 0); }
+        side > 0 === (sg.ax === 'x') ? I.push(base, base + 1, base + 2, base, base + 2, base + 3) : I.push(base, base + 2, base + 1, base, base + 3, base + 2);
+      }
+    }
+    { const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(P, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(U, 2)); g.setAttribute('normal', new T.Float32BufferAttribute(N, 3)); g.setIndex(I);
+      const m = new T.Mesh(g, new T.MeshStandardMaterial({ map: tex, roughness: 0.85, side: T.DoubleSide })); m.name = 'alp:signs'; m.receiveShadow = true; m.matrixAutoUpdate = false; root.add(m); }
+    // the clothes: sheets, shirts and towels pegged along each line, faded colours
+    const CP = [], CC = [], CN = [], CI = [], CA = [], colours = [[0.92, 0.9, 0.84], [0.86, 0.84, 0.78], [0.42, 0.52, 0.7], [0.66, 0.24, 0.2], [0.5, 0.56, 0.38], [0.8, 0.72, 0.5], [0.6, 0.62, 0.66]];
+    for (const [p, q] of built.LINES) {
+      const len = Math.hypot(q[0] - p[0], q[2] - p[2]), dx = (q[0] - p[0]) / len, dz = (q[2] - p[2]) / len, along = t => { const sag = 0.3 * (1 - (2 * t - 1) ** 2); return [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t - sag, p[2] + (q[2] - p[2]) * t]; };
+      for (let t = 0.08; t < 0.92;) {
+        const w = (0.35 + 0.5 * r()) / len, h = 0.45 + 0.45 * r(), col = colours[Math.floor(r() * colours.length)], t1 = Math.min(0.92, t + w), A = along(t), B = along(t1), base = CP.length / 3;
+        for (const [pt, dy, sw] of [[A, 0, 0], [B, 0, 0], [B, -h, 1], [A, -h, 1]]) { CP.push(pt[0], pt[1] + dy, pt[2]); CC.push(...col); CN.push(-dz, 0, dx); CA.push(sw * h); }
+        CI.push(base, base + 1, base + 2, base, base + 2, base + 3);
+        t = t1 + (0.04 + 0.25 * r()) / len * 3;
+      }
+    }
+    { const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(CP, 3)); g.setAttribute('color', new T.Float32BufferAttribute(CC, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(CN, 3)); g.setAttribute('aSway', new T.Float32BufferAttribute(CA, 1)); g.setIndex(CI);
+      const mat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: T.DoubleSide }), time = { value: 0 };
+      mat.onBeforeCompile = sh => { sh.uniforms.uTime = time; sh.vertexShader = 'attribute float aSway; uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  { float ph = position.x * 1.7 + position.z * 1.3; vec3 nn = normalize(normal); transformed += nn * aSway * (0.22 * sin(uTime * 1.6 + ph) + 0.08 * sin(uTime * 3.7 + ph * 2.1)); }'); };
+      mat.customProgramCacheKey = () => 'alp-cloth';
+      const m = new T.Mesh(g, mat); m.name = 'alp:washing'; m.castShadow = true; m.receiveShadow = true; m.matrixAutoUpdate = false; m.frustumCulled = false; root.add(m); parts.push(t => { time.value = t; }); }
+    // smoke: soft puffs that rise, widen, drift with the wind and thin out, all worked out on the graphics card
+    { const SRC = [[15.4, 4.0, 8.4, 1.0], [-15.6, 3.0, -8.4, 0.75]], n = 160, pos = [], seed = [];
+      for (const [x, y, z, k] of SRC) for (let i = 0; i < n * k; i++) { pos.push(x + (r() - 0.5) * 2.4, y, z + (r() - 0.5) * 2.4); seed.push(r(), r(), r(), k); }
+      const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('aSeed', new T.Float32BufferAttribute(seed, 4)); g.boundingSphere = new T.Sphere(new T.Vector3(0, 15, 0), 60);
+      const u = { uTime: { value: 0 }, uPx: { value: 600 }, uSun: { value: new T.Color(1.0, 0.93, 0.82) } };
+      const mat = new T.ShaderMaterial({ uniforms: u, transparent: true, depthWrite: false, fog: false,
+        vertexShader: `attribute vec4 aSeed; uniform float uTime, uPx; varying float vA, vT, vR;
+          void main(){ float t = fract(uTime / 16.0 + aSeed.x); vT = t; vR = aSeed.y;
+            vec3 p = position + vec3(t * t * 9.0 + sin(t * 6.0 + aSeed.y * 9.0) * 0.6, t * 20.0 * (0.8 + 0.4 * aSeed.z), (aSeed.z - 0.5) * t * 4.0);
+            vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
+            float size = (1.2 + t * 7.0) * (0.7 + 0.6 * aSeed.y);
+            gl_PointSize = min(size * uPx / -mv.z, 900.0);
+            vA = smoothstep(0.0, 0.07, t) * (1.0 - t) * (1.0 - t) * 0.62 * aSeed.w; }`,
+        fragmentShader: `uniform vec3 uSun; varying float vA, vT, vR;
+          void main(){ vec2 q = gl_PointCoord * 2.0 - 1.0; float d = dot(q, q); if (d > 1.0) discard;
+            float a = vA * (1.0 - d) * (1.0 - d) * (0.75 + 0.25 * sin(q.x * 5.0 + vR * 20.0) * sin(q.y * 4.0 + vR * 13.0));
+            vec3 col = mix(vec3(0.11, 0.1, 0.1), vec3(0.5, 0.5, 0.52), smoothstep(0.0, 0.6, vT)) * mix(0.7, 1.15, 0.5 - q.y * 0.5) * uSun;
+            gl_FragColor = vec4(col, a); }` });
+      const pts = new T.Points(g, mat); pts.name = 'alp:smoke'; pts.renderOrder = 5; pts.matrixAutoUpdate = false; root.add(pts);
+      parts.push(t => { u.uTime.value = t; const res = G.render.resolution, cam = G.camera; if (res && cam) u.uPx.value = res.y * 0.5 / Math.tan(cam.fov * Math.PI / 360); }); }
+    return { update(t) { for (const f of parts) f(t); } };
   }
 
   /* ------------------------------------------------------------------ the sky
@@ -999,7 +1087,7 @@ void main(){
   }
 
   /* ------------------------------------------------------------------ the level */
-  let PLANTS = null;
+  let PLANTS = null, EXTRAS = null;
   async function level(G) {
     const T = G.THREE, root = new T.Group(); root.name = 'alpine'; G.scene.add(root);
     const sets = await loadTextures(G), mats = makeMaterials(G, sets), bld = makeBuilder();
@@ -1007,6 +1095,7 @@ void main(){
     buildGround(bld);
     const meshes = toMeshes(G, bld, mats, root);
     PLANTS = buildPlants(G, built, root, mats);
+    EXTRAS = buildExtras(G, built, root);
     installPhysics(G, built);
     const shadow = fitShadows(G), sky = await makeSky(G);
     G.mats.uniforms.wet.value = 0;                                 // a dry morning
@@ -1039,7 +1128,7 @@ void main(){
       stats: { ...meshes, plants: PLANTS.tris, shadow, sky },
       groundSurfaceAt: (x, z) => (heap(x, z) > 0.02 ? 'concrete' : groundKind(x, z) === 'cobble' ? 'concrete' : 'dirt'),
       update(dt) {
-        clock += dt; PLANTS.update(clock); hold();
+        clock += dt; PLANTS.update(clock); EXTRAS.update(clock); hold();
         if (G.render.sunDir && G.camera) { const d = G.camera.getWorldDirection(fwd), e = Math.max(0, d.x * G.render.sunDir.x + d.z * G.render.sunDir.z); fill += (1.1 + 0.6 * e * e - fill) * Math.min(1, dt * 2.5); G.render.viewFill = fill; }
       },
     };
