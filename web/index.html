@@ -6737,8 +6737,9 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
   const PALETTE = ['#ff6b5e', '#ff9f43', '#ffd75e', '#9fd66b', '#4fd1a5', '#5fd3dc', '#6fa8ff', '#b08cff', '#ff7fc8', '#e8e4da'];
   const SHADES = ['Red', 'Orange', 'Yellow', 'Green', 'Mint', 'Cyan', 'Blue', 'Violet', 'Pink', 'Bone'];
   const isHex = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
-  const RESPAWN_MS = 4000, PROTECT_MS = 5000, SEND_DT = 1 / 15, ROUND_MS = 300000;
-  const roundNow = () => Math.floor(Date.now() / ROUND_MS), roundLeft = () => ROUND_MS - Date.now() % ROUND_MS;
+  const RESPAWN_MS = 4000, PROTECT_MS = 5000, SEND_DT = 1 / 15, ROUND_MS = 300000, BREAK_MS = 10000, CYCLE_MS = ROUND_MS + BREAK_MS;
+  const roundNow = () => Math.floor(Date.now() / CYCLE_MS), roundLeft = () => Math.max(0, ROUND_MS - Date.now() % CYCLE_MS);
+  const inBreak = () => Date.now() % CYCLE_MS >= ROUND_MS, breakLeft = () => inBreak() ? CYCLE_MS - Date.now() % CYCLE_MS : 0;
   const clock = ms => { const t = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
   const cleanName = v => typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16) : '';
 
@@ -6959,7 +6960,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       nameT = setTimeout(() => { my.name = cleanName(nameIn.value); try { localStorage.setItem('saltline.mp.name', my.name); } catch { /* fine */ } lobbySig = ''; lobbyPresence(); renderLobby(); }, 350);
     });
     nameIn.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.code === 'Enter' || ev.code === 'Escape') nameIn.blur(); });
-    setInterval(() => { if (game.state === 'title') { const c = f('clock'); const t = 'Round ends in ' + clock(roundLeft()); if (c.textContent !== t) c.textContent = t; if (!nameIn.placeholder || nameIn.placeholder === 'Name') nameIn.placeholder = shortName(net.myId, net.myPeer); } }, 1000);
+    setInterval(() => { if (game.state === 'title') { const c = f('clock'); const t = inBreak() ? 'Next round in ' + clock(breakLeft()) : 'Round ends in ' + clock(roundLeft()); if (c.textContent !== t) c.textContent = t; if (!nameIn.placeholder || nameIn.placeholder === 'Name') nameIn.placeholder = shortName(net.myId, net.myPeer); } }, 1000);
     function setView(showLobby) {
       root.classList.toggle('mp-solo', !showLobby);
       joinDm.classList.toggle('primary', showLobby); // the pad's Start presses the first primary button on the title
@@ -7822,8 +7823,8 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     function hudText() {
       if (!mp.live) return;
       const s = S();
-      if (mp.mode === 'tdm') { const t = teamTotals(); mp.obj = 'Team play · ' + TEAMS[mp.team].name; mp.tally = `${clock(roundLeft())} · Gate ${t[0]} · Quay ${t[1]}`; }
-      else { mp.obj = 'Deathmatch'; mp.tally = `${clock(roundLeft())} · ${s.kills} ${s.kills === 1 ? 'kill' : 'kills'} · ${s.deaths} down`; }
+      if (mp.mode === 'tdm') { const t = teamTotals(); mp.obj = 'Team play · ' + TEAMS[mp.team].name; mp.tally = `${inBreak() ? 'Next round ' + clock(breakLeft()) : clock(roundLeft())} · Gate ${t[0]} · Quay ${t[1]}`; }
+      else { mp.obj = 'Deathmatch'; mp.tally = `${inBreak() ? 'Next round ' + clock(breakLeft()) : clock(roundLeft())} · ${s.kills} ${s.kills === 1 ? 'kill' : 'kills'} · ${s.deaths} down`; }
       _setObjective(mp.obj); _setTally(mp.tally);
     }
     const board = el('div', 'mp-board'); const boardH = el('div', 'mp-board-h'); const boardT = el('b'); const boardHint = el('span'); const boardCols = el('div', 'mp-cols');
@@ -7856,7 +7857,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       const rows = fin ? fin.rows : liveRows();
       rows.sort((a, b) => b.k - a.k || a.d - b.d);
       boardT.textContent = fin ? fin.title : MODES[mp.mode].name;
-      boardHint.textContent = fin ? fin.hint : rows.filter(r => !r.left).length + (rows.filter(r => !r.left).length === 1 ? ' breacher in' : ' breachers in') + ' · ' + clock(roundLeft()) + ' left';
+      boardHint.textContent = fin ? (inBreak() ? 'Next round in ' + Math.max(1, Math.ceil(breakLeft() / 1000)) : fin.hint) : rows.filter(r => !r.left).length + (rows.filter(r => !r.left).length === 1 ? ' breacher in' : ' breachers in') + ' · ' + clock(roundLeft()) + ' left';
       boardCols.textContent = '';
       if (mp.mode === 'tdm') {
         const t = fin ? fin.totals : teamTotals();
@@ -7868,6 +7869,20 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     }
     // five minutes on the wall clock, the same five minutes for everyone; then the result, and every count back to zero
     function roundOver(next) {
+      const shown = mp.breakOf === mp.round; mp.breakOf = -1;
+      if (shown) mp.final = null; else roundEnd(8000);
+      for (const m of ['dm', 'tdm']) { stats[m].kills = 0; stats[m].deaths = 0; }
+      mp.bank = {}; mp.last = {}; mp.round = next;
+      for (const R of remotes.values()) if (R.rd !== next) { R.k = 0; R.d = 0; }
+      try { G.explosives.reset(); mp.lit.clear(); } catch { /* fine */ }
+      refillFrags();
+      respawn(false); // a new round is a clean start for everyone: new spawn point, full health, full ammo, down or not
+      try { hud.warn(shown ? 'New round' : mp.final.title, shown ? 2 : 4); } catch { /* fine */ }
+      try { G.audio.play('objective', { gain: .8 }); } catch { /* fine */ }
+      mp.dirty = true; hudText(); lobbyPresence();
+    }
+    // the result of the round just played, on the board for ms
+    function roundEnd(ms) {
       const rows = liveRows();
       for (const r of rows) if (!r.me && !r.left) { const l = mp.last[r.peer]; r.k = (l ? l.k : 0) + (r.bk || 0); r.d = (l ? l.d : 0) + (r.bd || 0); }
       rows.sort((a, b) => b.k - a.k || a.d - b.d);
@@ -7876,16 +7891,8 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
         for (const r of rows) if (r.tm === 0 || r.tm === 1) totals[r.tm] += r.k;
         title = totals[0] === totals[1] ? (totals[0] ? 'Round drawn' : 'Round over') : TEAMS[totals[0] > totals[1] ? 0 : 1].name + ' wins the round';
       } else if (rows.length && rows[0].k > 0) title = rows.length > 1 && rows[1].k === rows[0].k ? 'Round drawn' : (rows[0].me ? 'You win' : rows[0].name + ' wins') + ' the round';
-      mp.final = { rows, totals, title, hint: 'New round · everyone starts fresh', until: performance.now() + 8000 };
-      for (const m of ['dm', 'tdm']) { stats[m].kills = 0; stats[m].deaths = 0; }
-      mp.bank = {}; mp.last = {}; mp.round = next;
-      for (const R of remotes.values()) if (R.rd !== next) { R.k = 0; R.d = 0; }
-      try { G.explosives.reset(); mp.lit.clear(); } catch { /* fine */ }
-      refillFrags();
-      respawn(false); // a new round is a clean start for everyone: new spawn point, full health, full ammo, down or not
-      try { hud.warn(title, 4); } catch { /* fine */ }
-      try { G.audio.play('objective', { gain: .8 }); } catch { /* fine */ }
-      mp.dirty = true; hudText(); lobbyPresence();
+      mp.final = { rows, totals, title, hint: 'New round · everyone starts fresh', until: performance.now() + ms };
+      return mp.final;
     }
     const tabKey = ev => {
       if (!ev.code || ev.code !== kb.scores || !mp.live || game.state !== 'playing') return;
@@ -7956,11 +7963,14 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       } else {
         post.saturation += (.14 - post.saturation) * Math.min(1, dt * 3); post.fade = .42;
         downT.textContent = 'Back in ' + Math.max(1, Math.ceil((mp.respawnAt - now) / 1000));
-        if (now >= mp.respawnAt) respawn(false);
+        if (now >= mp.respawnAt && !inBreak()) respawn(false);
       }
       const rnd = roundNow();
       if (rnd !== mp.round) roundOver(rnd);
-      else { const left = roundLeft(), mark = left < 10500 ? 10 : left < 30500 ? 30 : 0; if (mark && mark !== mp.warned && game.state === 'playing') { try { hud.message(mark + ' seconds left in the round', 2.5); } catch { /* fine */ } } mp.warned = mark; }
+      else if (inBreak()) {
+        if (mp.breakOf !== rnd) { mp.breakOf = rnd; try { G.input.setGameplay(false); } catch { /* fine */ } const f = roundEnd(breakLeft() + 200); try { hud.warn(f.title, 4); } catch { /* fine */ } try { G.audio.play('objective', { gain: .8 }); } catch { /* fine */ } mp.dirty = true; }
+        P.invulnerable = true; P.enabled = false;
+      } else { const left = roundLeft(), mark = left < 10500 ? 10 : left < 30500 ? 30 : 0; if (mark && mark !== mp.warned && game.state === 'playing') { try { hud.message(mark + ' seconds left in the round', 2.5); } catch { /* fine */ } } mp.warned = mark; }
       syncRemotes(dt);
       mp.sendT -= dt;
       if (mp.dirty || mp.sendT <= 0) { mp.dirty = false; mp.sendT = SEND_DT; send(); }

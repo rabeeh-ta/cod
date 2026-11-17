@@ -169,6 +169,52 @@ export function applyGunHooks(html) {
   swap(`        for (const r of rows) if (r.tm === 0 || r.tm === 1) totals[r.tm] += r.k;
         for (const k in mp.bank) totals[mp.bank[k][0]] += mp.bank[k][1];`, `        for (const r of rows) if (r.tm === 0 || r.tm === 1) totals[r.tm] += r.k;`, 'the team scores at the end of a round');
 
+  // 15. ten seconds between rounds. The wall clock now runs in 5:10 cycles, the same for everyone: five minutes of play,
+  //     then a break in which the result stays on screen with a countdown, nobody moves and nobody can be hurt. The next
+  //     round starts everyone fresh, as before. (A page from before this change still counts 5:00 rounds until reloaded.)
+  swap(`ROUND_MS = 300000;\n  const roundNow = () => Math.floor(Date.now() / ROUND_MS), roundLeft = () => ROUND_MS - Date.now() % ROUND_MS;`,
+    `ROUND_MS = 300000, BREAK_MS = 10000, CYCLE_MS = ROUND_MS + BREAK_MS;\n  const roundNow = () => Math.floor(Date.now() / CYCLE_MS), roundLeft = () => Math.max(0, ROUND_MS - Date.now() % CYCLE_MS);\n  const inBreak = () => Date.now() % CYCLE_MS >= ROUND_MS, breakLeft = () => inBreak() ? CYCLE_MS - Date.now() % CYCLE_MS : 0;`, 'the round clock');
+  swap(`    function roundOver(next) {
+      const rows = liveRows();`, `    function roundOver(next) {
+      const shown = mp.breakOf === mp.round; mp.breakOf = -1;
+      if (shown) mp.final = null; else roundEnd(8000);
+      for (const m of ['dm', 'tdm']) { stats[m].kills = 0; stats[m].deaths = 0; }
+      mp.bank = {}; mp.last = {}; mp.round = next;
+      for (const R of remotes.values()) if (R.rd !== next) { R.k = 0; R.d = 0; }
+      try { G.explosives.reset(); mp.lit.clear(); } catch { /* fine */ }
+      refillFrags();
+      respawn(false); // a new round is a clean start for everyone: new spawn point, full health, full ammo, down or not
+      try { hud.warn(shown ? 'New round' : mp.final.title, shown ? 2 : 4); } catch { /* fine */ }
+      try { G.audio.play('objective', { gain: .8 }); } catch { /* fine */ }
+      mp.dirty = true; hudText(); lobbyPresence();
+    }
+    // the result of the round just played, on the board for ms
+    function roundEnd(ms) {
+      const rows = liveRows();`, 'the round splits into its result and the fresh start');
+  swap(`      mp.final = { rows, totals, title, hint: 'New round · everyone starts fresh', until: performance.now() + 8000 };
+      for (const m of ['dm', 'tdm']) { stats[m].kills = 0; stats[m].deaths = 0; }
+      mp.bank = {}; mp.last = {}; mp.round = next;
+      for (const R of remotes.values()) if (R.rd !== next) { R.k = 0; R.d = 0; }
+      try { G.explosives.reset(); mp.lit.clear(); } catch { /* fine */ }
+      refillFrags();
+      respawn(false); // a new round is a clean start for everyone: new spawn point, full health, full ammo, down or not
+      try { hud.warn(title, 4); } catch { /* fine */ }
+      try { G.audio.play('objective', { gain: .8 }); } catch { /* fine */ }
+      mp.dirty = true; hudText(); lobbyPresence();
+    }`, `      mp.final = { rows, totals, title, hint: 'New round · everyone starts fresh', until: performance.now() + ms };
+      return mp.final;
+    }`, 'the result of a round');
+  swap(`      if (rnd !== mp.round) roundOver(rnd);\n      else {`, `      if (rnd !== mp.round) roundOver(rnd);
+      else if (inBreak()) {
+        if (mp.breakOf !== rnd) { mp.breakOf = rnd; try { G.input.setGameplay(false); } catch { /* fine */ } const f = roundEnd(breakLeft() + 200); try { hud.warn(f.title, 4); } catch { /* fine */ } try { G.audio.play('objective', { gain: .8 }); } catch { /* fine */ } mp.dirty = true; }
+        P.invulnerable = true; P.enabled = false;
+      } else {`, 'the break between rounds');
+  swap(`if (now >= mp.respawnAt) respawn(false);`, `if (now >= mp.respawnAt && !inBreak()) respawn(false);`, 'nobody comes back during the break');
+  swap(`boardHint.textContent = fin ? fin.hint :`, `boardHint.textContent = fin ? (inBreak() ? 'Next round in ' + Math.max(1, Math.ceil(breakLeft() / 1000)) : fin.hint) :`, 'the countdown on the board');
+  swap(`mp.tally = \`\${clock(roundLeft())} · Gate`, `mp.tally = \`\${inBreak() ? 'Next round ' + clock(breakLeft()) : clock(roundLeft())} · Gate`, 'the countdown in team play');
+  swap(`mp.tally = \`\${clock(roundLeft())} · \${s.kills}`, `mp.tally = \`\${inBreak() ? 'Next round ' + clock(breakLeft()) : clock(roundLeft())} · \${s.kills}`, 'the countdown in deathmatch');
+  swap(`const t = 'Round ends in ' + clock(roundLeft());`, `const t = inBreak() ? 'Next round in ' + clock(breakLeft()) : 'Round ends in ' + clock(roundLeft());`, 'the countdown in the lobby');
+
   return html;
 }
 
