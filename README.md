@@ -8,7 +8,7 @@ The first screen has three ways to play:
 - **Room**: private. Create a room to get a 6-character code and invite link (`/r/ABC123`), or join one with a code. Inside the room you pick Deathmatch or Team play (Gate vs Quay). Up to 10 players.
 - **Solo**: the single-player mission.
 
-Above them is the **Map** picker: **Saltline Terminal** (the harbour), **Colosseum** (the arena of the Colosseum under restoration, an hour after a storm) or **Alpine** (a war-ruined mountain village on a clear morning, with the Alps all round). Quick play matches you with players on the same map, a room keeps the map it was made with, and a room link loads that room's map for whoever opens it. Solo is set in the harbour.
+Above them is the **Map** picker: **Saltline Terminal** (the harbour), **Colosseum** (the arena of the Colosseum under restoration, an hour after a storm), **Alpine** (a war-ruined mountain village on a clear morning, with the Alps all round) or **Maram** (a walled desert town under rocky hills in the morning sun, with two sites, a long road and tunnels). Quick play matches you with players on the same map, a room keeps the map it was made with, and a room link loads that room's map for whoever opens it. Solo is set in the harbour.
 
 Voice chat works in every online match. Press **V** (or the MIC button on touch) to talk. You hear the players in your match, and in Team play only your own team. **Settings → Voice chat volume** sets how loud other players are, from 0 to 400% (200% to start).
 
@@ -57,6 +57,8 @@ See [CLAUDE.md](CLAUDE.md) for the Cloudflare stack.
 | `Matchmaker` Durable Object | `src/worker.js` | One per continent. Tracks public rooms and fills the fullest open one first |
 | `Census` Durable Object | `src/worker.js` | One for the whole game. Counts players online, in Deathmatch and in private rooms for the first screen |
 | Import | `scripts/import.mjs` | Makes `web/index.html` from a claude.ai export with a few small patches that fail loudly if the game changes |
+| Maram | `web/maps/maram.js`, `web/maps/maram/` | The fourth map: a desert town, drawn from a model (`maram.glb`). Everything drawn is solid: `world.json` holds its collision boxes, the places players can reach (for the minimap) and its spawns, all made by `scripts/maram-build.mjs`. The model's small pictures get a sharp second layer of stone, plaster, wood, rubble and sand in world space (Alpine's textures, and sand made in the file), the hills round it and the sky are a 360° photograph, sunbeams are drawn wherever the sun reaches a roofed floor and a light haze lies over the town, roofed places lose most of the sky's light, motes glitter where the sun falls, palms stand outside the walls, and the eye glides over the stepped ramps |
+| Maram build | `scripts/maram-build.mjs` | Cuts the Maram model into collision boxes, fills the space behind its walls, keeps wall tops out of reach, and runs a walk-and-jump robot with the game's own movement over the result before it writes `world.json`. Run it after any change to the model |
 | Map hooks | `scripts/map-hooks.mjs` | The patches that let a map other than the harbour build itself; the import runs them |
 | Guns | `web/guns.js`, `web/guns/` | The shotgun and the sniper rifle: models, handling, shots, reloads, sounds and the scope; the three gun cards (the model turning, its numbers, its name) on the first screen, on the card shown when down, and on **B** in a match, where the pick is for the next life; the protected seconds after a respawn |
 | Gun models | `scripts/gun-assets.mjs` | Turns a downloaded `.glb` into the small files in `web/guns/` (run once per model, on macOS) |
@@ -71,10 +73,13 @@ The gun and ammunition models come from Sketchfab and are used under their Creat
 - Ammunition: "Ammo Set" by Guy in a Poncho, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), https://sketchfab.com/3d-models/ammo-set-31b78afb6f544b0386d02be2d7aad5d8. Textures resized, scaled up.
 - Sniper rifle: "SV-98 | Contract Wars" by xlisov, [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/), https://sketchfab.com/3d-models/sv-98-contract-wars-130bd9dd144a4da2971d148dd0098492. One of the two rifles in the file is used; the bolt and magazine separated. Non-commercial use only.
 
+The Maram map is a model by vrchris on Sketchfab (https://sketchfab.com/vrchris), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Renamed, scaled to the game and turned a quarter round; the picture on one plaque replaced.
+
 The Alpine map uses work by others:
 
-- Wall, roof, cobble, turf, earth, rubble, wood and bark textures: from [Valle Morta](https://github.com/Leonxlnx/valle-morta) by Leonxlnx, MIT licence (`web/maps/alpine/tex/LICENSE.txt`). Resized and recompressed. The grass (tufts of crossed cards, each a painting of many blades) follows its method, and the blade-painting code is adapted from it.
+- Wall, roof, cobble, turf, earth, rubble, wood and bark textures: from [Valle Morta](https://github.com/Leonxlnx/valle-morta) by Leonxlnx, MIT licence (`web/maps/alpine/tex/LICENSE.txt`). Resized and recompressed. Maram lays the masonry, plaster, wood, rubble and worn plaster ones over its model as detail. The grass (tufts of crossed cards, each a painting of many blades) follows its method, and the blade-painting code is adapted from it.
 - The valley and sky: "Alps Field" by Andreas Mischok, [polyhaven.com/a/alps_field](https://polyhaven.com/a/alps_field), CC0. Cut into a horizon strip and a small whole-sky picture.
+- Maram's hills and sky: "Klippad Sunrise 2" by Greg Zaal, [polyhaven.com/a/klippad_sunrise_2](https://polyhaven.com/a/klippad_sunrise_2), CC0. Cut the same way (`web/maps/maram/band.jpg`, `sky.jpg`).
 
 ## Known limits
 

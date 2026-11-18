@@ -939,11 +939,11 @@
     /* Maps. The game builds one map per page load (see web/maps.js), so playing another reloads the page into it. Picking
        a map card only marks it; the reload comes with Find match (or with joining a room that plays another map). */
     const maps = window.__saltlineMaps || { list: [{ id: 'terminal', name: 'Saltline Terminal' }], id: 'terminal', ready: Promise.resolve('terminal'), name: () => 'Saltline Terminal', choose: () => false };
-    const mapId = () => maps.id, loadingText = () => ({ terminal: 'Loading the yard…', alpine: 'Loading the village…' }[mapId()] || 'Loading the arena…');   // a room link learns its map a moment after the page starts, so always ask
+    const mapId = () => maps.id, loadingText = () => ({ terminal: 'Loading the yard…', alpine: 'Loading the village…', maram: 'Loading the town…' }[mapId()] || 'Loading the arena…');   // a room link learns its map a moment after the page starts, so always ask
     const post = (path, body) => fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     // reload into a map (and a path) without changing the one the player has chosen as theirs
     const visit = (id, path) => maps.choose(id, path, false) || (location.assign(path), true);
-    const MAP_INFO = { terminal: 'Container harbour at first light', colosseum: 'Sand floor of a ruined arena', alpine: 'War-torn village under the Alps' };
+    const MAP_INFO = { terminal: 'Container harbour at first light', colosseum: 'Sand floor of a ruined arena', alpine: 'War-torn village under the Alps', maram: 'Walled desert town under rocky hills' };
     const MODE_LIST = [
       { id: 'tdm', name: 'Team deathmatch', blurb: 'Red against Blue. The team with the most kills in five minutes wins.' },
       { id: 'dm', name: 'Deathmatch', blurb: 'Everyone for themselves. Top of the board wins.' },
