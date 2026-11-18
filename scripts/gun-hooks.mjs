@@ -228,6 +228,69 @@ export function applyGunHooks(html) {
   swap(`data-mp="join-t1" disabled>Join Quay</button>`, `data-mp="join-t1" disabled>Join Blue</button>`, 'joining the second team in the old lobby');
   swap(`R.av.setHelmet(own); // the helmet itself is repainted in the player's colour`, `R.av.setHelmet(css); // the helmet itself is repainted: the team's colour in Team deathmatch, the player's own otherwise`, 'the helmet in the team colour');
 
+  // 17. vaulting (web/vault.js). Where the game would jump, a player moving forward into something low climbs over it or
+  //     through the window above it instead; while the vault lasts it moves the player in place of the game's own
+  //     movement (the view, the eye height and the weapon still update as usual).
+  swap('<script src="/guns.js"></script>\n', '<script src="/guns.js"></script>\n<script src="/vault.js"></script>\n', 'the vault script');
+  swap('a>0&&r>0&&(!A.crouching||F())&&(A.vel.y=Pz,', 'a>0&&r>0&&window.__SALTLINE_VAULT&&__SALTLINE_VAULT.start(A,n,G)&&(a=0,r=0),a>0&&r>0&&(!A.crouching||F())&&(A.vel.y=Pz,', 'a vault in place of a jump');
+  swap('o=A.crouching?Nt.crouchHeight:Nt.standHeight;let le=oe?G.move.x:0', 'o=A.crouching?Nt.crouchHeight:Nt.standHeight;if(window.__SALTLINE_VAULT&&__SALTLINE_VAULT.step(A,n,J)){Q(J),W(J);return}let le=oe?G.move.x:0', 'the vault moving the player');
+  //     The body: the soldier's pose takes a hand on the ledge (handL / handR, each with a weight), knees tucked up (tuck)
+  //     and a lean over the top (hunch). Your own view borrows the knife's first-person arms for the hands, once the
+  //     camera has its final place for the frame; other players see the vault from `vt` in the presence.
+  swap(`const cT0 = 1.15 * c, cK0 = 2.2 * c, cT = cT0 + .5 * st.air, cK = cK0 + 1.0 * st.air;`,
+    `const cT0 = 1.15 * c, cK0 = 2.2 * c, cT = cT0 + .5 * st.air + (s.tuck || 0) * .9, cK = cK0 + 1.0 * st.air + (s.tuck || 0) * 1.3;`, 'knees tucked in a vault');
+  swap(`hipBone.position.z -= (drop - bob + .01 * c) / scale;`, `hipBone.position.z -= (drop - bob + .01 * c + (s.sink || 0)) / scale;`, 'the hips low over a vault');
+  swap(`const hunch = -.1 * run - .16 * c - .05, p3`, `const hunch = -.1 * run - .16 * c - .05 - (s.hunch || 0), p3`, 'leaning over a vault');
+  swap(`reach(armR, hr, s.pole || poleR, tw, bend); reach(armL, hl, poleL, 0, null);`,
+    `if (s.handL) { hl.lerp(s.handL, s.handLw); grip('l', curlL, mix(1, .2, s.handLw)); } if (s.handR) { hr.lerp(s.handR, s.handRw); grip('r', curlR, mix(1.25, s.gripR == null ? .2 : s.gripR, s.handRw)); if (s.twistR != null) tw = s.twistR; if (s.bendR) bend = s.bendR; }
+          reach(armR, hr, s.pole || poleR, tw, bend); reach(armL, hl, s.poleL || poleL, 0, s.bendL || null);`, 'hands on a ledge');
+  swap(`const FPO = new V3(.05, -1.6, -.1), _h = new V3(); // where the soldier stands relative to your eye: only his right arm reaches into view`,
+    `const FPO = new V3(.05, -1.6, -.1), _h = new V3(); // where the soldier stands relative to your eye: only his right arm reaches into view
+    window.__SALTLINE_FPBODY = () => ({ body: buildKnife(), at: FPO }); // the vault's hands from your own eyes`, 'first-person arms for the vault');
+  swap(`      stepKnife(dt, play);\n`, `      stepKnife(dt, play);\n      try { if (window.__SALTLINE_VAULT) window.__SALTLINE_VAULT.view(G, dt); } catch (e) { console.error('[vault] view: ' + e); }\n`, 'the vault seen from your own eyes');
+  swap(`slash: R.slashT > 0 ? Math.sin(Math.PI * (1 - R.slashT / .3)) : 0, dt });`,
+    `slash: R.slashT > 0 ? Math.sin(Math.PI * (1 - R.slashT / .3)) : 0, dt, ...(R.alive && window.__SALTLINE_VAULT ? window.__SALTLINE_VAULT.remote(R, dt) : null) });`, 'another player vaulting');
+  swap(`am: window.__SALTLINE_GUNS.ammoWire(), c: myColor(),`, `am: window.__SALTLINE_GUNS.ammoWire(), vt: window.__SALTLINE_VAULT ? window.__SALTLINE_VAULT.wire() : null, c: myColor(),`, 'a vault in the presence');
+
+  // 18. peeking (Q / E). The leaning player's eye used to go 85 cm to the side while other players saw only the upper
+  //     body tilt, about 30 cm: the peek saw out while the soldier drawn for it, and its hitboxes, stayed behind the
+  //     corner. Now the eye goes at most 50 cm (less where a wall stops it), as a lean round a corner does, the real
+  //     offset goes out in the presence (lo, metres to the right), and the soldier leans further from the hips so his
+  //     head is where that eye is; his feet move at most 25 cm to make up the rest, so a peek shows a head and a
+  //     shoulder, not a body. The head hitbox follows the drawn head; the body's follows the feet.
+  swap(`const lean = { v: 0 };`, `const lean = { v: 0, off: 0 };`, 'the lean keeps its offset');
+  swap(`let off = Math.abs(lean.v) * .85;`, `let off = Math.abs(lean.v) * .5;`, 'a lean goes 50 cm');
+  swap(`P.eye.y -= .09 * Math.abs(lean.v);`, `P.eye.y -= .2 * Math.abs(lean.v);`, 'the eye dips as far as the drawn head does');
+  swap(`l3 = -s.lean * .16;`, `l3 = -s.lean * (s.leanK || .16);`, 'how far a lean tilts the spine');
+  swap(`dt, ...(R.alive && window.__SALTLINE_VAULT ?`, `dt, leanK: .4, ...(window.__SALTLINE_VAULT && window.__SALTLINE_VAULT.body ? window.__SALTLINE_VAULT.body(R, dt) : null), ...(R.alive && window.__SALTLINE_VAULT ?`, 'other players lean further from the hips');
+  swap(`if (Math.abs(lean.v) < .004) { lean.v = 0; return; }`, `if (Math.abs(lean.v) < .004) { lean.v = 0; lean.off = 0; return; }`, 'no offset when upright');
+  swap(`P.eye.x += rx * off; P.eye.z += rz * off;`, `lean.off = sgn * off; P.eye.x += rx * off; P.eye.z += rz * off;`, 'the offset the eye really moved');
+  swap(`ln: r2(lean.v),`, `ln: r2(lean.v), lo: r2(lean.off),`, 'the lean offset in the presence');
+  swap(`R.tlean = Number.isFinite(+pr.ln) ? clamp(+pr.ln, -1, 1) : 0;`, `R.tlean = Number.isFinite(+pr.ln) ? clamp(+pr.ln, -1, 1) : 0; R.lo = Number.isFinite(+pr.lo) ? clamp(+pr.lo, -1, 1) : R.tlean * .5;`, 'reading the lean offset');
+  swap(`window.__SALTLINE_VAULT.remote(R, dt) : null) });`, `window.__SALTLINE_VAULT.remote(R, dt) : null) });
+        { // a peek: the head as far out as the player's eye, the body stepping what the tilt does not cover
+          R.loS = (R.loS || 0) + ((R.alive ? R.lo || 0 : 0) - (R.loS || 0)) * Math.min(1, dt * 11);
+          let shift = 0; const rx = Math.cos(R.yaw), rz = -Math.sin(R.yaw), hb = av.J && av.J.head;
+          if (hb && Math.abs(R.loS) > .01) {
+            const hv = G.__peekAt || (G.__peekAt = new T.Vector3()); av.group.updateMatrixWorld(true); hb.bone.getWorldPosition(hv);
+            shift = Math.max(-.25, Math.min(.25, R.loS - ((hv.x - av.group.position.x) * rx + (hv.z - av.group.position.z) * rz)));
+            av.group.position.x += rx * shift; av.group.position.z += rz * shift;
+          }
+          R.lsx = rx * shift; R.lsz = rz * shift;
+        }
+        { // under a roof or a ceiling a soldier is lit a little from within, or a dark uniform in an unlit room is a black shape nobody can see
+          R.inT = (R.inT || 0) - dt;
+          if (R.inT <= 0) { R.inT = .3; const o = G.__roofO || (G.__roofO = new T.Vector3()), up = G.__roofU || (G.__roofU = new T.Vector3(0, 1, 0)); let roof = null; try { roof = G.physics.raycast(o.set(R.pos.x, R.pos.y + 1.7, R.pos.z), up, 8); } catch { roof = null; } R.indoor = !!roof; }
+          const want = R.indoor ? .85 : .2; R.glow = R.glow == null ? want : R.glow + (want - R.glow) * Math.min(1, dt * 4);
+          if (av.mats) for (const mm of av.mats) mm.m.emissiveIntensity = R.glow;
+        }`, 'the soldier where the peek is');
+  swap(`const drop = R.crouchT * .45, x = R.pos.x, y = R.pos.y, z = R.pos.z;`, `const drop = R.crouchT * .45, x = R.pos.x + (R.lsx || 0), y = R.pos.y, z = R.pos.z + (R.lsz || 0);`, 'the body hitbox where the soldier is drawn');
+
+  // 19. falls. The game hurt a landing faster than 13 m/s, a drop of about 3.3 m, so jumping or vaulting out of an
+  //     upstairs window (the sill is 3.9 m up) cost health. Now a landing hurts only over 16 m/s (about 5 m down, more
+  //     than anything a player can stand on), and less for each m/s past it.
+  swap('Y>13&&A.damage((Y-13)*7,null)', 'Y>16&&A.damage((Y-16)*5,null)', 'fall damage only past a 5 m drop');
+
   return html;
 }
 

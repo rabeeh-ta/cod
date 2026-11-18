@@ -12,8 +12,8 @@
 //                                                                 for that mode (Team deathmatch players meet only each other)
 //   POST /api/rooms   {map?, mode?} -> 201 { code, max, map, mode }  create a private room on that map
 //   GET  /api/rooms/:code        -> 200 { exists, players, max, map, mode }  check before joining (the page loads the room's map)
-//                                   A room keeps the map it was made with. No map, or one this server doesn't know,
-//                                   means the harbour ("terminal"). mode is 'dm' (Deathmatch) or 'tdm' (Team
+//                                   A room starts on the map it was made with; anyone in a private room can change it
+//                                   (the 'map' message below). No map, or one this server doesn't know, means the harbour ("terminal"). mode is 'dm' (Deathmatch) or 'tdm' (Team
 //                                   deathmatch): the mode a room opens on; players in a room can still pick either.
 //   GET  /api/rooms/:code/ws     -> WebSocket upgrade            join (?peer=…&uid=…)
 //   GET  /api/ice?room=CODE      -> 200 { iceServers }           STUN/TURN for voice (TURN when a key is configured)
@@ -22,10 +22,13 @@
 //                                                                 Deathmatch (public rooms) and in private rooms
 //
 // Wire protocol (JSON text frames; "ping" -> "pong" is answered without waking the object)
-//   server -> client  {t:'hello', you, code, max, now, peers:[{peer, by, p}]}
+//   server -> client  {t:'hello', you, code, max, now, map, peers:[{peer, by, p}]}
 //                     {t:'join', peer, by} · {t:'leave', peer} · {t:'p', peer, d, full?} · {t:'sig', from, d}
+//                     {t:'map', map, peer}   the room's map changed (to everyone, the one who changed it too): every
+//                                            page reloads into it
 //                     {t:'error', code}  followed by a close (4000 bad request, 4001 full, 4004 no such room)
 //   client -> server  {t:'p', d:{…changed presence keys…}, full?:true} · {t:'sig', to, d}
+//                     {t:'map', d:{map}}      change a private room's map (public rooms keep theirs: quick play finds them by map)
 
 import { DurableObject } from "cloudflare:workers";
 
@@ -222,8 +225,9 @@ export class Room extends DurableObject {
     if (others.length >= MAX_PLAYERS) return refuse(4001, "full");
 
     server.serializeAttachment({ peer, by, p: {} });
+    const map = (await this.ctx.storage.get("map")) || MAPS[0];
     server.send(JSON.stringify({
-      t: "hello", you: peer, code, max: MAX_PLAYERS, now: Date.now(),
+      t: "hello", you: peer, code, max: MAX_PLAYERS, now: Date.now(), map,
       peers: others.map((ws) => { const a = ws.deserializeAttachment(); return { peer: a.peer, by: a.by, p: a.p }; }),
     }));
     this.broadcast({ t: "join", peer, by }, server);
@@ -249,6 +253,11 @@ export class Room extends DurableObject {
       // the attachment survives hibernation, so late joiners get the full picture in their hello
       try { ws.serializeAttachment(a); } catch { /* over 16 KB: still relay, just not remembered */ }
       this.broadcast(m.full ? { t: "p", peer: a.peer, d: m.d, full: true } : { t: "p", peer: a.peer, d: m.d }, ws);
+    } else if (m.t === "map" && MAPS.includes(m.d.map)) {
+      // a private room's map, changed from its lobby. Everyone moves to it, so nobody plays a different map in the same room
+      if (await this.ctx.storage.get("mm")) return;
+      if (m.d.map === MAPS[0]) await this.ctx.storage.delete("map"); else await this.ctx.storage.put("map", m.d.map);
+      this.broadcast({ t: "map", map: m.d.map, peer: a.peer });
     } else if (m.t === "sig" && typeof m.to === "string") {
       // voice chat: offers, answers and ICE candidates go to one peer only
       const out = JSON.stringify({ t: "sig", from: a.peer, d: m.d });

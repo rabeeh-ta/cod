@@ -15,9 +15,11 @@
    - Thin things are solid too: shutters, lintels, sills, beams, rails. On the ground floor they lie flush inside
      their openings, so there is nothing to catch on in passing.
    - Nothing can be climbed that should not be. A player gets 1.69 m above whatever they stand on (a 1.27 m jump and
-     a 0.42 m step, which the game allows in the air too). So everything meant to be stood on is at most 1.2 m high,
-     and everything else is at least 3.2 m: ruined walls are 0.4 or 0.8 m, or 3.2 m and up, never in between. Roofs
-     are out of reach, so they stop shots only, as the flat sheets they are.
+     a 0.42 m step, which the game allows in the air too) and 1.95 m by vaulting (this map's vaultMax). The blocks and
+     crates stand up to 1.95 m, so from their tops a player reaches 3.9 m; every top over 3.15 m with open sky over it
+     is therefore carried up out of reach by a box for players only (see the caps near the end). Ruined walls are
+     0.4 or 0.8 m, or 3.2 m and up. Roofs stop shots only, as the flat sheets they are, so a gap in the caps would be
+     a way into a sealed house.
    - The look is borrowed where others did it better: the textures are Valle Morta's (MIT) and the valley round the
      village is a 360-degree photograph of the Alps (CC0). See the README for the credits.
 
@@ -45,6 +47,10 @@
   /* Houses. [x0, z0, x1, z1], storeys, ridge ('x' or 'z'), and what kind:
        sealed   doors and shutters closed, nobody goes in; damage only out of reach
        open     the ground floor can be entered; damage only out of reach
+     upstairs: a stair against the west wall (keep it blind: noWin) up to a room on the first floor whose windows
+     can be climbed out of; bigWin: one side whose first-floor windows are a single opening instead, as high as the others and 5 m wide;
+     extraDoors: [[side, along]] a doorway more; veranda: a ruin's side ('n', 's': stair against the west wall; 'e': stair
+     against the back wall) with boards along it at the first floor, and nothing else up there
        ruin     broken walls, open to the sky or nearly; damage anywhere
      and what the war did to it (see house()): damage.blasts [x, y, z, radius], damage.collapse (a corner or a stretch
      brought down: where, how far, how wide), damage.top (the height the walls are broken off at), damage.burnt (soot
@@ -52,14 +58,14 @@
      Edge houses (outside PLAY) are part of what keeps players in, so their walls stay whole below 3.2 m. */
   const HOUSES = [
     // north of the street
-    { id: 'n1', at: [-33, 4, -22, 13], floors: 3, ridge: 'x', kind: 'sealed', tint: [1.12, 0.98, 0.74], quoins: true, roof: 'holed', roofHoles: [[-25.8, 6.6, 1.7]], damage: { blasts: [[-25.6, 7.4, 4, 1.25]] } },
-    { id: 'n2', at: [-19, 4, -8, 13], floors: 2, ridge: 'x', kind: 'ruin', tint: [1.06, 1.0, 0.9], seed: 11, roof: 'none', damage: { collapse: { x: -13, z: 4, depth: 7.4, sigma: 3.0 }, rag: 0.8, blasts: [[-17.2, 1.6, 13.2, 1.5]], burnt: 0.45 } },
+    { id: 'n1', at: [-33, 4, -22, 13], floors: 3, ridge: 'x', kind: 'open', upstairs: true, noWin: ['w0', 'w1'], bigWin: 'n', tint: [1.12, 0.98, 0.74], quoins: true, roof: 'holed', roofHoles: [[-25.8, 6.6, 1.7]], damage: { blasts: [[-25.6, 7.4, 4, 1.25]] } },
+    { id: 'n2', at: [-19, 4, -8, 13], floors: 2, ridge: 'x', kind: 'ruin', veranda: 'e', tint: [1.06, 1.0, 0.9], seed: 11, roof: 'none', damage: { collapse: { x: -13, z: 4, depth: 7.4, sigma: 3.0 }, rag: 0.8, blasts: [[-17.2, 1.6, 13.2, 1.5]], burnt: 0.45 } },
     { id: 'n3', at: [-5, 4, 7, 13], floors: 2, ridge: 'x', kind: 'open', tint: [1.14, 0.92, 0.82], balcony: 's', quoins: true, roof: 'holed', roofHoles: [[5.2, 10.6, 1.5]], upstairs: true, noWin: ['w0', 'w1'] },
-    { id: 'n4', at: [10, 4, 21, 13], floors: 2, ridge: 'x', kind: 'ruin', tint: [0.96, 0.95, 0.93], seed: 23, stone: true, roof: 'skeleton', floor: true, damage: { top: 6.6, rag: 0.7, blasts: [[14.2, 1.2, 4, 1.55], [21, 4.6, 7.6, 1.6]], burnt: 0.9 } },
+    { id: 'n4', at: [10, 4, 21, 13], floors: 2, ridge: 'x', kind: 'ruin', tint: [0.96, 0.95, 0.93], seed: 23, stone: true, extraDoors: [['w', 8.5]], roof: 'skeleton', floor: true, damage: { top: 6.6, rag: 0.7, blasts: [[14.2, 1.2, 4, 1.55], [21, 4.6, 7.6, 1.6]], burnt: 0.9 } },
     // south of the street
-    { id: 's1', at: [-34, -13, -23, -4], floors: 2, ridge: 'x', kind: 'sealed', tint: [1.05, 1.03, 0.92], quoins: true, roof: 'holed', roofHoles: [[-25.8, -6.6, 1.4], [-31.6, -10.6, 1.0]], damage: { blasts: [[-28.2, 4.7, -4, 1.1]] } },
+    { id: 's1', at: [-34, -13, -23, -4], floors: 2, ridge: 'x', kind: 'open', upstairs: true, noWin: ['w0', 'w1'], bigWin: 's', tint: [1.05, 1.03, 0.92], quoins: true, roof: 'holed', roofHoles: [[-25.8, -6.6, 1.4], [-31.6, -10.6, 1.0]] },
     { id: 's2', at: [-20, -12, -11, -4], floors: 2, ridge: 'x', kind: 'ruin', tint: [1.1, 0.98, 0.8], seed: 37, roof: 'skeleton', damage: { collapse: { x: -11, z: -4, depth: 8.2, sigma: 2.7 }, rag: 0.7, burnt: 0.35 } },
-    { id: 's3', at: [10, -13, 20, -4], floors: 3, ridge: 'x', kind: 'open', tint: [0.98, 1.02, 1.08], balcony: 'n', quoins: true, roof: 'intact' },
+    { id: 's3', at: [10, -13, 20, -4], floors: 3, ridge: 'x', kind: 'open', upstairs: true, noWin: ['w0', 'w1'], bigWin: 's', tint: [0.98, 1.02, 1.08], balcony: 'n', quoins: true, roof: 'intact' },
     // the church: nave and tower
     { id: 'nave', at: [16, -30, 28, -17], floors: 2, ridge: 'x', kind: 'sealed', tint: [1.08, 1.06, 1.0], tall: 7.4, church: true, quoins: true, roof: 'holed', roofHoles: [[20.6, -20.4, 2.1], [25.6, -26.4, 1.3]] },
     { id: 'tower', at: [23, -17, 28, -12], floors: 2, ridge: 'spire', kind: 'sealed', tint: [1.08, 1.06, 1.0], tall: 15.5, quoins: true },
@@ -116,7 +122,8 @@
     return clamp(0.5 + (d + (fbm2(x * 1.1 + 11, z * 1.1 + 5, 3) - 0.5) * 1.6) / 0.8, 0, 1);
   }
   const groundKind = (x, z) => (cobbleAt(x, z) > 0.5 ? 'cobble' : turfAt(x, z) > 0.5 ? 'turf' : 'dirt');
-  /* Bushes: [x, z, radius]. Leaves to look at, and a block inside them so nobody walks through. */
+  const VERANDAS = [];   // [x0, z0, x1, z1] of each veranda, filled as the houses are built
+  /* Bushes: [x, z, radius]. Leaves to look at, and a block as wide and high as the leaves, so nobody walks into one. */
   const BUSHES = [[-9.2, -7.5, 0.9], [8.2, -7, 0.8], [-9, -22, 1.0], [7.5, -17, 0.9], [-34.6, 20.5, 1.0], [-26.5, 14.6, 0.8], [-34.8, -15, 0.9], [-12.4, -24.6, 0.9], [2, -24.8, 0.8], [26.8, 3.4, 0.7], [-22.4, 12.4, 0.7], [20.2, -3.6, 0.6], [8.6, 12.5, 0.6]];
 
   /* ------------------------------------------------------------------ before the game reads its constants */
@@ -406,6 +413,7 @@
         B(put, 'wood', h.u0, h.v1 - 0.07, f0, h.u1, h.v1, f1, wd);
         if (h.kind !== 'door') B(put, 'wood', h.u0, h.v0, f0, h.u1, h.v0 + 0.06, f1, wd);
       }
+      if (h.big) return;   // the wide opening: frame and surround only
       const sh = { tint: paint, soot }, shDim = { tint: vscale(paint, 0.84), soot };
       if (h.kind === 'door') {
         if (kind === 'sealed' || h.church) B(put, 'wood', h.u0 + 0.07, 0, face - out * 0.12, h.u1 - 0.07, h.v1 - 0.07, face - out * 0.17, { tint: vscale(paint, 0.75), soot });
@@ -542,8 +550,11 @@
           if (spec.id === 'tower') { if (i === Math.floor(bays / 2)) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: H - 4.4, v1: H - 1.6, kind: 'belfry', arch: true }); continue; }
           if (spec.church) { if (i === doorBay) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: 0, v1: 3.0, kind: 'door', arch: true, church: true }); else if (long) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: 3.4, v1: 6.2, kind: 'win', arch: true, church: true }); continue; }
           if (!(spec.noWin && spec.noWin.includes(side + i))) holes.push(i === doorBay ? { u0: cu - 0.5, u1: cu + 0.5, v0: 0, v1: 2.1, kind: 'door' } : { u0: cu - 0.5, u1: cu + 0.5, v0: 1.0, v1: 2.2, kind: 'win' });
-          for (let f = 1; f < floors; f++) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: levels[f] + 0.9, v1: levels[f] + 2.1, kind: 'win', up: true });
+          for (let f = 1; f < floors; f++) if (!(f === 1 && spec.bigWin === side)) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: levels[f] + 0.9, v1: levels[f] + 2.1, kind: 'win', up: true });
         }
+        // a first floor that looks out through one wide opening; a doorway more
+        if (faces && spec.bigWin === side) { const mu = Math.round((a + b) / 2 / CELL) * CELL; holes.push({ u0: mu - 2.5, u1: mu + 2.5, v0: F1 + 0.9, v1: F1 + 2.1, kind: 'win', up: true, big: true }); }
+        for (const [sd, u] of spec.extraDoors || []) if (sd === side) holes.push({ u0: u - 0.5, u1: u + 0.5, v0: 0, v1: 2.1, kind: 'door' });
         const gable = !long && (rk === 'none' || rk === 'skeleton') && spec.ridge !== 'spire' ? { mid, half: halfIn, rise: halfIn * 0.5 + 0.14 } : null;
         const g = gridWall({ axis, a, b, at, H, gable, holes, field, low: ruin, mat, tint, soot, innerSide, breaks: levels });
         walls.push({ g, axis, a, b, at, side, long, holes });
@@ -575,15 +586,15 @@
       const ix0 = x0 + WALL, ix1 = x1 - WALL, iz0 = z0 + WALL, iz1 = z1 - WALL;
       if (spec.upstairs) {
         /* A house to fight from: a stair against its blind west wall, the upper floor open over it, and a room whose
-           windows look over the street and the back lane. The windows can be shot through but not climbed through.
+           windows look over the street and the back lane. A player can vault out of them and drop to the street.
            Up here the same rule holds as below, measured from this floor: nothing to stand on within reach above it
            (no handrail: it was a step to the window heads and from there to the roofs). */
         const sx0 = ix0, sx1 = ix0 + 0.95, sz0 = iz0 + 0.7, run = 0.3, rise = 0.25, n = Math.round(F1 / rise), sz1 = sz0 + n * run, fl = { tint: [0.62, 0.56, 0.5] };
         for (let k = 0; k < n; k++) solid('wood', sx0, 0, sz0 + k * run, sx1, rise * (k + 1), sz0 + (k + 1) * run, { tint: k % 2 ? [0.7, 0.63, 0.55] : [0.64, 0.58, 0.51] });
         solid('wood', ix0, F1 - 0.22, iz0, sx1, F1, sz0, fl); solid('wood', ix0, F1 - 0.22, sz1, sx1, F1, iz1, fl); solid('wood', sx1, F1 - 0.22, iz0, ix1, F1, iz1, fl);
         for (let x = ix0 + 0.7; x < ix1 - 0.4; x += 1.4) solid('wood', x, F1 - 0.4, x < sx1 + 0.1 ? sz1 : iz0, x + 0.16, F1 - 0.22, iz1, { tint: [0.56, 0.5, 0.44] });
-        solid('wood', ix0, H - 0.06, iz0, ix1, H, iz1, { tint: [0.5, 0.46, 0.42], faces: 'b' });
-        for (const w of walls) for (const h of w.holes) if (h.up) ph.addBox(w.axis === 'x' ? [h.u0, h.v0, w.at] : [w.at, h.v0, h.u0], w.axis === 'x' ? [h.u1, h.v1, w.at + WALL] : [w.at + WALL, h.v1, h.u1], { surface: 'glass', playerOnly: true });
+        if (floors > 2) solid('wood', ix0, F2 - 0.22, iz0, ix1, F2, iz1, { tint: [0.5, 0.46, 0.42], faces: 'tb' });   // the second floor is the room's ceiling
+        else solid('wood', ix0, H - 0.06, iz0, ix1, H, iz1, { tint: [0.5, 0.46, 0.42], faces: 'b' });
       } else if (!ruin && !spec.church && spec.id !== 'tower') {
         for (let f = 1; f < floors; f++) solid('wood', ix0, levels[f] - 0.22, iz0, ix1, levels[f], iz1, { tint: [0.62, 0.56, 0.5], faces: 'tb' });
         if (rk === 'intact' || rk === 'holed') deco('wood', ix0, H - 0.04, iz0, ix1, H, iz1, { tint: [0.5, 0.46, 0.42], faces: 'b' });
@@ -610,13 +621,33 @@
       if (ruin && !spec.floor) {
         // the floor is gone; the stubs of its joists still stand out of the walls, burnt off. Their tops are at 3.2 m,
         // out of reach, and nothing lower stands under them
-        for (const w of walls.filter(w => w.long)) {
+        for (const w of walls.filter(w => w.long && w.side !== spec.veranda)) {
           const into = w.side === 'n' || w.side === 'w' ? 1 : -1, inner = into > 0 ? w.at + WALL : w.at;
           for (let A = w.a + 0.75; A < w.b - 0.75; A += 0.6) {
             if (w.g.cellAt(A, F1 + 0.1) !== WALLc || w.g.cellAt(A + 0.16, F1 + 0.1) !== WALLc || r() > 0.6) continue;
+            if (spec.veranda === 'e' && w.side === 's' && A > ix1 - 1.5 - 3.9) continue;   // none over the stair to the veranda
             const L = 0.35 + 0.8 * r(), c0 = Math.min(inner, inner + into * L), c1 = Math.max(inner, inner + into * L);
             if (w.axis === 'x') solid('wood', A, F1 - 0.02, c0, A + 0.16, HI_Y, c1, { tint: CHAR_T }); else solid('wood', c0, F1 - 0.02, A, c1, HI_Y, A + 0.16, { tint: CHAR_T });
           }
+        }
+      }
+      if (spec.veranda) {
+        /* A veranda: boards 1.5 m deep along one wall at the first floor, on joists out of the wall, and a stair up to
+           them. Nothing else is up there. Its top is 3.0 m, under the 3.15 m over which every open top is capped for
+           players, so from it a player can look out, jump down or vault out of a window. */
+        const dep = 1.5, wd = { tint: [0.6, 0.54, 0.47] }, n = Math.round(F1 / 0.25), run = 0.3, tone = k => ({ tint: k % 2 ? [0.62, 0.56, 0.49] : [0.56, 0.5, 0.44] });
+        if (spec.veranda === 'e') {
+          const xa = ix1 - dep;
+          VERANDAS.push([xa, iz0, ix1, iz1]);   // the caps leave the low wall tops round the boards open (below)
+          solid('wood', xa, F1 - 0.06, iz0, ix1, F1, iz1, wd);
+          for (let z = iz0 + 0.4; z < iz1 - 0.2; z += 1.2) solid('wood', xa, F1 - 0.3, z, ix1, F1 - 0.06, z + 0.16, { tint: CHAR_T });
+          for (let k = 0; k < n; k++) { const a0 = xa - (n - k) * run; solid('wood', a0, 0, iz1 - 0.95, a0 + run, 0.25 * (k + 1), iz1, tone(k)); }   // up along the back wall
+        } else {
+          const south = spec.veranda === 's', za = south ? iz1 - dep : iz0, zb = south ? iz1 : iz0 + dep;
+          VERANDAS.push([ix0, za, ix1, zb]);
+          solid('wood', ix0, F1 - 0.06, za, ix1, F1, zb, wd);
+          for (let x = ix0 + 0.4; x < ix1 - 0.2; x += 1.2) solid('wood', x, F1 - 0.3, za, x + 0.16, F1 - 0.06, zb, { tint: CHAR_T });
+          for (let k = 0; k < n; k++) { const a0 = south ? za - (n - k) * run : zb + (n - k - 1) * run; solid('wood', ix0, 0, a0, ix0 + 0.95, 0.25 * (k + 1), a0 + run, tone(k)); }   // up along the west wall
         }
       }
       if (rk !== 'none' && spec.ridge !== 'spire') roof(spec, { H, alongX, mid, halfIn, rk, r, burnt, walls, mat, tint });
@@ -688,15 +719,48 @@
       solid('dark', x - 0.7, 0, z - 0.7, x + 0.7, 0.3, z + 0.7, { flat: true }); post(x - 0.85, z, 3.0, 0.07); post(x + 0.85, z, 3.0, 0.07); beam(x - 1.0, 3.0, z - 0.08, x + 1.0, 3.14, z + 0.08); }
     // across the street, what was being carried when the fighting came: a stack of sawn beams, and crates beside it
     { const x = -14, z = 0.4;
-      for (let layer = 0; layer < 3; layer++) for (let k = 0; k < 4 - layer; k++) { const zz = z - 0.62 + layer * 0.16 + k * 0.32, sh = 0.82 + 0.3 * seeded(), off = (seeded() - 0.5) * 0.3; solid('wood', x - 2.2 + off, layer * 0.3, zz, x + 2.2 + off, layer * 0.3 + 0.3, zz + 0.3, { tint: [sh, sh * 0.95, sh * 0.88] }); }
-      solid('wood', x + 2.7, 0, z - 0.9, x + 3.7, 1.0, z + 0.1, { tint: [0.95, 0.88, 0.78] }); solid('wood', x + 2.9, 0, z + 0.2, x + 3.7, 0.8, z + 1.0, { tint: [0.8, 0.76, 0.7] }); }
-    // fallen blocks of stone, each a box: low cover in the lanes
-    for (const [x, z, w, h, d] of [[-27, 1.6, 1.2, 0.8, 0.8], [-24.5, -1.8, 0.9, 0.6, 1.3], [-6.8, 9, 1.0, 0.8, 0.7], [8.4, -1.9, 1.3, 0.9, 0.9], [15, 1.9, 0.9, 0.7, 1.4], [24.5, -3, 1.2, 1.0, 1.2], [-28, -18.5, 1.4, 1.0, 0.9], [-15, -20, 1.0, 1.2, 1.0],
-      [4, 15.4, 1.3, 0.9, 0.8], [-12, 15.8, 0.9, 1.1, 1.2], [18, 15.2, 1.2, 0.8, 1.2], [24, 15.5, 1.0, 1.2, 1.0], [-30, 15.8, 1.2, 1.0, 1.0], [5.5, -21, 1.2, 1.0, 1.4], [-4.5, -8.5, 1.4, 0.7, 0.9], [22, -5.5, 1.0, 1.0, 1.0]])
-      solid('stone', x - w / 2, 0, z - d / 2, x + w / 2, h, z + d / 2, { tint: [0.9 + 0.2 * seeded(), 0.9 + 0.15 * seeded(), 0.88 + 0.1 * seeded()] });
-    // stacks of firewood and crates of the village's own: plank boxes
-    for (const [x, z, w, h, d] of [[-33.2, -19, 1.0, 1.1, 2.4], [-20.6, 15.6, 1.4, 1.0, 1.0], [12.6, -14.6, 1.0, 1.0, 1.0], [26.4, 11.6, 1.2, 1.1, 1.2], [-2.2, 3.2, 1.0, 0.9, 0.9], [7.6, -24.4, 1.0, 1.0, 1.0]])
-      solid('wood', x - w / 2, 0, z - d / 2, x + w / 2, h, z + d / 2, { tint: [0.74, 0.68, 0.6] });
+      for (let layer = 0; layer < 5; layer++) for (let k = 0; k < 6 - layer; k++) { const zz = z - 0.62 + layer * 0.16 + k * 0.32, sh = 0.82 + 0.3 * seeded(), off = (seeded() - 0.5) * 0.3; solid('wood', x - 2.2 + off, layer * 0.3, zz, x + 2.2 + off, layer * 0.3 + 0.3, zz + 0.3, { tint: [sh, sh * 0.95, sh * 0.88] }); }
+      solid('wood', x + 2.7, 0, z - 0.9, x + 3.7, 1.42, z + 0.1, { tint: [0.95, 0.88, 0.78] }); solid('wood', x + 2.9, 0, z + 0.2, x + 3.7, 1.6, z + 1.0, { tint: [0.8, 0.76, 0.7] }); }
+    /* Fallen blocks of stone and the village's crates: cover in the lanes. Each stands from three quarters of a
+       man's height (1.35 m) to just over his head (1.95 m), so a player vaults or climbs onto it but cannot jump onto it
+       when it is over 1.69 m. Where each stands is random but the same for everyone (the seeded random), and they
+       zigzag across the lanes (below); never against a house or a wall, on a heap, by a post or near another block.
+       From their tops a player reaches 3.9 m (a vault), which is why everything over 3.15 m is capped for players (below). */
+    const POSTS = [[-25, 3.2], [-9, -3.2], [9, 3.2], [22, -3.2], [-18, 13.9], [3, 17.3], [-31, 3.75], [-6.5, 3.75], [19.8, 3.75], [-6.5, 13.85]];
+    const taken = [];
+    const fits = (x, z, w, d, pad = 0.35) => !HOUSES.some(hh => inRect(x, z, hh.at, Math.max(w, d) / 2 + pad)) && !EDGE_WALLS.some(([a, b, c, e]) => inRect(x, z, [Math.min(a, c), Math.min(b, e), Math.max(a, c), Math.max(b, e)], Math.max(w, d) / 2 + pad))
+      && heap(x, z) < 0.02 && heap(x - w / 2, z - d / 2) < 0.02 && heap(x + w / 2, z + d / 2) < 0.02 && heap(x - w / 2, z + d / 2) < 0.02 && heap(x + w / 2, z - d / 2) < 0.02
+      && !POSTS.some(([px, pz]) => Math.hypot(px - x, pz - z) < Math.max(w, d) / 2 + 0.9) && !BUSHES.some(([bx, bz, br]) => Math.hypot(bx - x, bz - z) < br + Math.max(w, d) / 2 + 0.9) && !taken.some(([tx, tz, tr]) => Math.hypot(tx - x, tz - z) < tr + Math.max(w, d) / 2 + 1.6)
+      && inRect(x, z, [PLAY.x0, PLAY.z0, PLAY.x1, PLAY.z1], -0.6);
+    /* Where each goes: [x, z, w, d, lane] where lane is [z0, z1] for one that stands in a lane running along x (the
+       street, the back lanes): it goes against one side of the lane or the other (taken in turn, so they zigzag), a
+       random distance from it, a random way along, and half of them turned. Without a lane it is moved up to 2.5 m. */
+    let flip = 0;
+    const place = (x, z, w, d, lane) => {
+      for (let k = 0; k < 30; k++) {
+        let W_ = w, D_ = d; if (seeded() < 0.5) { W_ = d; D_ = w; }
+        let nx, nz;
+        if (lane) {
+          const side = (flip + (k > 14 ? 1 : 0)) % 2, gap = 0.4 + 0.9 * seeded();
+          nx = x + (seeded() - 0.5) * 4; nz = side ? lane[1] - gap - D_ / 2 : lane[0] + gap + D_ / 2;
+        } else { nx = x + (seeded() - 0.5) * 5; nz = z + (seeded() - 0.5) * 5; }
+        if (fits(nx, nz, W_, D_)) { if (lane) flip++; return [nx, nz, W_, D_]; }
+      }
+      return null;
+    };
+    const STREET = [-4, 4], BACK_N = [13, 18];
+    for (const [x, z, w, d, lane] of [[-27, 1.6, 1.2, 0.8, STREET], [-24.5, -1.8, 0.9, 1.3, STREET], [-6.8, 9, 1.0, 0.7], [8.4, -1.9, 1.3, 0.9, STREET], [15, 1.9, 0.9, 1.4, STREET], [24.5, -3, 1.2, 1.2, STREET], [-28, -18.5, 1.4, 0.9], [-15, -20, 1.0, 1.0],
+      [4, 15.4, 1.3, 0.8, BACK_N], [-12, 15.8, 0.9, 1.2, BACK_N], [18, 15.2, 1.2, 1.2, BACK_N], [24, 15.5, 1.0, 1.0, BACK_N], [-30, 15.8, 1.2, 1.0, BACK_N], [5.5, -21, 1.2, 1.4], [-4.5, -8.5, 1.4, 0.9], [22, -5.5, 1.0, 1.0]]) {
+      const at = place(x, z, w, d, lane); if (!at) continue;
+      const [px, pz, pw, pd] = at, h = 1.35 + 0.6 * seeded(); taken.push([px, pz, Math.max(pw, pd) / 2]);
+      solid('stone', px - pw / 2, 0, pz - pd / 2, px + pw / 2, h, pz + pd / 2, { tint: [0.9 + 0.2 * seeded(), 0.9 + 0.15 * seeded(), 0.88 + 0.1 * seeded()] });
+    }
+    // stacks of firewood and crates of the village's own: plank boxes, 1.35 to 1.45 m (the ammunition is set out on crates under 1.45 m)
+    for (const [x, z, w, d, lane] of [[-33.2, -19, 1.0, 2.4], [-20.6, 15.6, 1.4, 1.0, BACK_N], [12.6, -14.6, 1.0, 1.0], [26.4, 11.6, 1.2, 1.2], [-2.2, 3.2, 1.0, 0.9, STREET], [7.6, -24.4, 1.0, 1.0]]) {
+      const at = place(x, z, w, d, lane); if (!at) continue;
+      const [px, pz, pw, pd] = at; taken.push([px, pz, Math.max(pw, pd) / 2]);
+      solid('wood', px - pw / 2, 0, pz - pd / 2, px + pw / 2, 1.35 + 0.1 * seeded(), pz + pd / 2, { tint: [0.74, 0.68, 0.6] });
+    }
     // lamp posts
     for (const [x, z] of [[-25, 3.2], [-9, -3.2], [9, 3.2], [22, -3.2], [-18, 13.9], [3, 17.3]]) { solid('iron', x - 0.06, 0, z - 0.06, x + 0.06, 3.4, z + 0.06, { flat: true, tint: [0.5, 0.48, 0.46] }); thin('iron', x - 0.06, 3.3, z - 0.06, x + 0.7, 3.38, z + 0.06, { flat: true, tint: [0.5, 0.48, 0.46] }); thin('rust', x + 0.5, 2.95, z - 0.14, x + 0.78, 3.3, z + 0.14, { flat: true, tint: [0.7, 0.62, 0.55] }); }
 
@@ -717,7 +781,8 @@
     /* ---- trees on the green and in the gardens: a trunk you can stand behind, and a crown of leaves (which stops nothing) */
     const trees = [[-7, -20, 1.0], [5, -10, 1.15], [-4, -23.5, 0.85], [-30, 21, 1.0], [-33.5, 9.5, 0.8]];
     for (const [x, z, s] of trees) solid('bark', x - 0.22 * s, 0, z - 0.22 * s, x + 0.22 * s, Math.max(3.5, 3.7 * s), z + 0.22 * s, { tint: [1, 0.96, 0.9] });
-    for (const [x, z, rad] of BUSHES) ph.addBox([x - rad * 0.62, 0, z - rad * 0.62], [x + rad * 0.62, Math.min(1.2, rad * 1.25), z + rad * 0.62], { surface: 'wood', playerOnly: true, noNav: true });
+    for (const [x, z, rad] of BUSHES) { const k = ph.addBox([x - rad * 0.95, 0, z - rad * 0.95], [x + rad * 0.95, Math.min(1.9, rad * 1.5 + 0.4), z + rad * 0.95], { surface: 'wood', playerOnly: true, noNav: true }); if (k) k.noVault = true; }
+    // a bush stops people as wide and as high as its leaves go, so nobody stands inside one and sees out through leaves that hide them; nobody vaults over leaves either
 
     /* ---- where a new life begins: on open ground, all round the village */
     for (const [x, z] of [[-34, 0], [-34.5, 15.5], [-30, -22], [-21.5, 8], [-21.5, -16], [-27, 15.8], [-14, 15.6], [-6.5, 15.6], [-6.5, 8], [1, 15.6], [8.5, 8], [14, 15.6], [26.2, 15.4], [25, 9], [24.5, 0], [24, -9], [21.5, -14.5],
@@ -1107,6 +1172,29 @@ void main(){
     for (const l of [hemi, back]) { l.layers.enable(1); root.add(l); }
     root.add(back.target);
     if (G.camera && G.camera.far < 1100) { G.camera.far = 1100; G.camera.updateProjectionMatrix(); }
+    /* Nothing over 3.15 m can be stood on. Every top that high with open sky over it (a ruined wall broken off, the
+       coping of a garden wall, a post, a wall's head under a roof that stops shots only) is carried up to 12 m by a box
+       for players only. Where a top has something over it within 2.6 m it is the
+       sill of an opening or a floor under a ceiling, and stays as it is; this is decided per 25 cm square, so a top
+       only partly covered is capped where it is open. Round a veranda (3.0 m) the wall tops up to 4.0 m are left open,
+       so a player can jump or vault from it over the wall and drop outside; from there nothing higher is open.
+       Shots, grenades and the walk grid do not see these. */
+    { const ph = G.physics, all = ph.boxes.filter(b => !b.bulletOnly && !b.capOf), list = all.filter(b => b.max.y >= 3.15 && b.max.y < 12), caps = [], C = 0.25;
+      // square by square (25 cm): a top only partly covered (a broken wall stepping up, a coping under the corner of a house) is capped where it is open
+      for (const b of list) {
+        const above = all.filter(c => c !== b && c.min.y >= b.max.y - 0.01 && c.min.y < b.max.y + 2.6 && c.min.x < b.max.x && c.max.x > b.min.x && c.min.z < b.max.z && c.max.z > b.min.z);
+        const nx = Math.max(1, Math.ceil((b.max.x - b.min.x) / C - 1e-6)), nz = Math.max(1, Math.ceil((b.max.z - b.min.z) / C - 1e-6)), sx = (b.max.x - b.min.x) / nx, sz = (b.max.z - b.min.z) / nz;
+        for (let j = 0; j < nz; j++) {
+          let run = -1;
+          for (let i = 0; i <= nx; i++) {
+            const x = b.min.x + (i + 0.5) * sx, z = b.min.z + (j + 0.5) * sz;
+            const open = i < nx && !above.some(c => x > c.min.x && x < c.max.x && z > c.min.z && z < c.max.z) && !(b.max.y <= F1 + 1.0 && b.max.x - b.min.x > 0.3 && b.max.z - b.min.z > 0.3 && VERANDAS.some(r => inRect(x, z, r, 2.5)));   // wall tops, not posts
+            if (open && run < 0) run = i;
+            if (!open && run >= 0) { caps.push([b.min.x + run * sx, b.max.y, b.min.z + j * sz, b.min.x + i * sx, 12, b.min.z + (j + 1) * sz]); run = -1; }
+          }
+        }
+      }
+      for (const c of caps) { const k = ph.addBox([c[0], c[1], c[2]], [c[3], c[4], c[5]], { surface: 'concrete', playerOnly: true, noNav: true }); if (k) k.capOf = true; } }
     const sp = (x, z) => ({ pos: new T.Vector3(x, 0, z), zone: 'village', type: 'ground' });
     let clock = 0, fill = 1.1; const fwd = new T.Vector3();
     // the sky is bright all round; left at the game's strength its light would flatten every shadow. The game sets the
@@ -1118,6 +1206,7 @@ void main(){
       playerStart: { pos: new T.Vector3(-34, 0, 0), yaw: -Math.PI / 2 },
       objectives: [], extraction: { pos: new T.Vector3(0, -50, 0), radius: 1 },
       enemySpawns: built.spawns.map(([x, z]) => sp(x, z)),
+      vaultMax: 1.95,   // web/vault.js: the blocks are up to 1.95 m, and placed so nothing more comes within reach from their tops
       zones: [{ name: 'village', min: [-40, -30], max: [40, 30] }], interiorBoxes: [], coverPoints: [], skylights: [], shedLights: [], placed: built.placed,
       cinematicPath: [
         { pos: [-33, 1.7, 0.5], look: [-10, 3, 0] }, { pos: [-22, 1.8, 1.5], look: [-6, 4, -3] }, { pos: [-9, 1.9, -2], look: [3, 2.5, -14] }, { pos: [-2, 2.2, -12], look: [16, 8, -18] },

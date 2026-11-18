@@ -383,6 +383,14 @@
     e.stopImmediatePropagation(); e.preventDefault();
   }, { capture: true, passive: false });
   window.addEventListener('keydown', e => { if (inScope() && (window.__SALTLINE_KEYS || {})[e.code] === 'swap') { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+  /* Z steps the zoom too (2x, 4x, 6x, 10x, then back to 2x): a Mac trackpad does not scroll while a key is held, so on
+     the move the wheel cannot be used. Z is bound to nothing else. */
+  const STEPS = [41.3, 21.3, 14.3, 8.6];
+  window.addEventListener('keydown', e => {
+    if (e.code !== 'KeyZ' || e.repeat || !inScope() || (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName))) return;
+    const next = STEPS.find(f => f < zoomTo - 0.5); zoomTo = next != null ? next : ZOOM.wide;
+    e.stopImmediatePropagation(); e.preventDefault();
+  }, true);
   let visible = true, scoped = null;                           // visible: the game is showing the gun (false with the knife or a grenade in hand, and when down)
 
   /* ------------------------------------------------------------------ sound
@@ -802,7 +810,10 @@
   }
   function ammoSetup(g) {
     const T = g.THREE, ph = g.physics, B = ph.bounds, tops = [];
-    for (const b of ph.boxes || []) {
+    // a map whose floors are not at height 0 names its own places (level.ammoSpots: [{ x, y, z }, ...])
+    const given = g.level && Array.isArray(g.level.ammoSpots) ? g.level.ammoSpots : null;
+    if (given) for (const p of given) tops.push({ x: p.x, y: p.y, z: p.z });
+    else for (const b of ph.boxes || []) {
       if (b.bulletOnly || b.playerOnly) continue;
       const w = b.max.x - b.min.x, d = b.max.z - b.min.z, y = b.max.y, x = (b.min.x + b.max.x) / 2, z = (b.min.z + b.max.z) / 2;
       if (y < 0.5 || y > 1.45 || w < 0.7 || d < 0.7 || w > 3.2 || d > 3.2) continue;

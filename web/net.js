@@ -10,15 +10,27 @@
      tts         -> speechSynthesis, reads typed radio messages aloud
      db          -> not provided (the original only used it for connection diagnostics)
    It also owns the front end around the matches: home, quick play, private match and the room lobby.
-   Loaded as a plain <script> right before the multiplayer layer, so window.claude exists when that layer starts. */
+   Loaded as a plain <script> right before the multiplayer layer, so window.claude exists when that layer starts.
+   It brings in touch.js too: the layout editor for the touch buttons (Settings → Touch controls). */
 (() => {
   'use strict';
+
+  { const s = document.createElement('script'); s.src = '/touch.js'; s.async = true; document.head.appendChild(s); }
 
   const CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
   const MAX = 10;
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode: lasts this visit */ } },
+  };
+  /* The match this tab is in, kept for this tab only (sessionStorage), so a reload goes straight back into it:
+     { kind: 'public' | 'private', code, mode, team, map, t }. Set on joining a match, cleared on going back to the
+     menus; older than ten minutes it is ignored. */
+  const resume = {
+    get() { try { const r = JSON.parse(sessionStorage.getItem('saltline.resume') || 'null'); return r && Date.now() - r.t < 600000 ? r : null; } catch { return null; } },
+    set(r) { try { sessionStorage.setItem('saltline.resume', JSON.stringify({ ...r, t: Date.now() })); } catch { /* fine */ } },
+    touch() { const r = resume.get(); if (r) resume.set(r); },
+    clear() { try { sessionStorage.removeItem('saltline.resume'); } catch { /* fine */ } },
   };
   const rnd = n => { const a = 'abcdefghijkmnpqrstuvwxyz23456789', b = crypto.getRandomValues(new Uint8Array(n)); let s = ''; for (const x of b) s += a[x % 32]; return s; };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -102,6 +114,7 @@
         if (Object.keys(me.presence).length) sendRaw({ t: 'p', full: true, d: me.presence }); // after a reconnect
         clearInterval(pingT); pingT = setInterval(() => { if (ws && ws.readyState === 1) ws.send('ping'); }, 20000);
         hooks.onHello([...peers.keys()]);
+        if (typeof m.map === 'string') hooks.onMap(m.map, '', true);
         notify(true);
       } else if (m.t === 'join') {
         peers.set(m.peer, peerOf(m.peer, m.by, {}));
@@ -119,6 +132,8 @@
         notify();
       } else if (m.t === 'sig' && m.from && m.d) {
         hooks.onSig(m.from, m.d);
+      } else if (m.t === 'map' && typeof m.map === 'string') {
+        hooks.onMap(m.map, m.peer || '', false);
       }
     }
 
@@ -150,6 +165,8 @@
       leave() { dead = true; clearInterval(pingT); try { ws && ws.close(1000, 'leave'); } catch { /* fine */ } return Promise.resolve(); },
       // for voice
       sig(to, d) { sendRaw({ t: 'sig', to, d }); },
+      // a private room's map: everyone in the room moves to it (the server answers everyone with {t:'map'})
+      setMap(map) { if (!joined) return false; sendRaw({ t: 'map', d: { map } }); return true; },
       mine: () => me.presence,
       get: peer => peers.get(peer),
     };
@@ -423,7 +440,7 @@
     document.documentElement.classList.toggle('net-public', kind === 'public');
     room = makeRoom(code, {
       onHello: l => voice.onHello(l), onJoin: p => voice.onJoin(p), onLeave: p => voice.onLeave(p), onSig: (f, d) => voice.onSig(f, d),
-      onCount: n => ui.count(n), onFatal: why => ui.fatal(why),
+      onCount: n => ui.count(n), onFatal: why => ui.fatal(why), onMap: (map, by, hello) => ui.roomMap(map, by, hello),
     });
     voice.bind(room);
     resolveRoom(room);
@@ -525,8 +542,11 @@
       .fe-mode:disabled { cursor: default; opacity: .5; }
 
       /* a map: its picture from above, the name on a dark fade at the bottom */
-      .fe-maps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-      .fe-maps.one { grid-template-columns: minmax(0, 520px); }
+      /* every map on one line, however many there are */
+      .fe-maps { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; }
+      .fe-maps.one { grid-auto-flow: row; grid-template-columns: minmax(0, 520px); }
+      /* the gun cards under the maps: three map columns wide, so each gun card lines up with a map card */
+      .fe-col [data-fe="gun-slot"] .gun-cards { gap: 12px; width: calc((100% - 36px) * .75 + 24px); }
       .fe-map { position: relative; appearance: none; display: block; width: 100%; aspect-ratio: 16 / 9; padding: 0; overflow: hidden; cursor: pointer; text-align: left; color: var(--bone, #e8e4da);
         background: #15181b; border: 1px solid var(--line, rgba(232,228,218,.2)); border-radius: 2px; transition: border-color .18s ease; }
       .fe-map img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .45s cubic-bezier(.2, .7, .2, 1), filter .18s ease; filter: saturate(.9) brightness(.92); }
@@ -619,9 +639,34 @@
       .fe-foot kbd { display: inline-block; margin-right: 8px; padding: 3px 5px; border: 1px solid var(--line, rgba(232,228,218,.2)); border-radius: 2px; font: 500 10px/1 var(--f-mono, monospace); letter-spacing: .08em; color: var(--bone-dim, rgba(232,228,218,.64)); }
       .fe-foot [hidden] { display: none; }
 
+      /* Settings, in the top bar of every screen: the game's own settings panel opens over the menu */
+      .fe-set { display: inline-flex; align-items: center; gap: 9px; }
+      .fe-set svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; }
+      .fe-set svg circle { fill: var(--ink, #0b0d0f); }
+      html.net-settings #ui .m-screen[data-s="title"] { visibility: hidden !important; }
+      /* the room lobby: changing the map while others are in a match asks first */
+      .fe-confirm { margin-top: 12px; padding: 14px 16px; border: 1px solid var(--signal, #ffb347); background: rgba(34,27,16,.9); border-radius: 2px; }
+      .fe-confirm[hidden] { display: none; }
+      .fe-confirm p { margin: 0 0 12px; font-size: 16px; line-height: 1.35; }
+      .fe-confirm div { display: flex; flex-wrap: wrap; gap: 8px; }
+      .fe-btn.primary { background: var(--signal, #ffb347); border-color: var(--signal, #ffb347); color: var(--ink, #0b0d0f); }
+      .fe-btn.primary:hover:not(:disabled) { background: var(--signal-hot, #ffc977); border-color: var(--signal-hot, #ffc977); }
+      .fe-btn.primary:active:not(:disabled) { color: var(--ink, #0b0d0f); border-color: var(--signal-hot, #ffc977); }
+      /* the pause screen of a private room: its code and invite link, apart from the game's own buttons */
+      /* the pause card sits in the top left corner, out of the way of the middle of the view, not in the centre */
+      #ui .m-screen.m-card[data-s="paused"] { left: max(24px, var(--gl, 24px)); top: 24px; transform: none; max-height: calc(100vh - 48px); overflow-y: auto; }
+      .net-invite { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 18px 0 6px; padding: 12px 12px 12px 14px;
+        border: 1px solid var(--line, rgba(232,228,218,.2)); border-left: 2px solid var(--signal, #ffb347); background: rgba(232,228,218,.04); }
+      .net-invite > span { display: grid; gap: 6px; min-width: 0; }
+      .net-invite small { font: 600 11px/1 var(--f-label, sans-serif); letter-spacing: .24em; text-transform: uppercase; color: var(--steel, #8d9aa3); }
+      .net-invite b { font: 500 19px/1 var(--f-mono, monospace); letter-spacing: .26em; color: var(--signal, #ffb347); }
+      .net-invite .btn.small { width: auto; flex: none; margin: 0; padding-left: 14px; padding-right: 14px; }
+
       @media (max-width: 1000px) {
         .fe-split { grid-template-columns: minmax(0, 1fr); }
         .fe-split > .fe-col { max-width: 620px; }
+        .fe-maps { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .fe-col [data-fe="gun-slot"] .gun-cards { width: 100%; }
         .net-gate { background: rgba(11,13,15,.88); }
       }
       @media (max-width: 640px) {
@@ -629,9 +674,29 @@
         .fe-crumb { display: none; }
         .fe-name input { width: 110px; }
         .fe-item b { font-size: 30px; }
-        .fe-maps { grid-template-columns: minmax(0, 1fr); }
+        .fe-maps { grid-auto-flow: row; grid-template-columns: minmax(0, 1fr); }
         .fe-teams { grid-template-columns: minmax(0, 1fr); }
         .fe-foot { padding-right: 60px; }
+      }
+      /* a phone on its side: the home screen in two columns, everything tighter, so the ways in fit without scrolling */
+      @media (max-height: 500px) and (min-width: 560px) {
+        .net-gate { padding-top: max(10px, env(safe-area-inset-top)); padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+        .fe-body { padding: 12px 0; }
+        .fe-home { max-width: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); column-gap: 32px; align-items: center; }
+        .fe-home .fe-eyebrow { grid-column: 1; grid-row: 1; align-self: end; }
+        .fe-home .fe-word { grid-column: 1; grid-row: 2; align-self: start; margin: 10px 0 0; font-size: clamp(56px, 10vw, 104px); }
+        .fe-home .fe-menu { grid-column: 2; grid-row: 1 / span 2; }
+        .fe-item { padding: 11px 8px 11px 16px; }
+        .fe-item:hover:not(:disabled), .fe-item:focus-visible { padding-left: 22px; }
+        .fe-item b { font-size: 26px; }
+        .fe-item span { font-size: 14px; }
+        .fe-h { font-size: 38px; }
+        .fe-k { margin: 14px 0 8px; }
+        .fe-mode { padding: 10px 14px; }
+        .fe-mode b { font-size: 20px; }
+        .fe-go { margin-top: 14px; }
+        .fe-cta { padding: 13px 18px 12px; }
+        .fe-cta > span { font-size: 26px; }
       }
       @media (prefers-reduced-motion: reduce) {
         .fe-item, .fe-item::before, .fe-item b, .fe-item i, .fe-mode, .fe-map, .fe-map img, .fe-map::before, .fe-map-tag, .fe-cta, .fe-btn, .fe-name, .fe-team .fe-join-team { transition: none; }
@@ -699,7 +764,7 @@
     gate.innerHTML = `
       <header class="fe-top">
         <div class="fe-brand"><span class="fe-mark">SALTLINE</span><span class="fe-crumb" data-fe="crumb"></span></div>
-        <div class="fe-me"><span class="fe-online" data-net-stat="online"></span><label class="fe-name"><span>Name</span><input data-net="name" maxlength="16" placeholder="Breacher" autocomplete="off" spellcheck="false"></label></div>
+        <div class="fe-me"><span class="fe-online" data-net-stat="online"></span><button type="button" class="fe-btn fe-set" data-act="settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4h13M1.5 8h13M1.5 12h13"/><circle cx="5" cy="4" r="1.7"/><circle cx="11" cy="8" r="1.7"/><circle cx="6.5" cy="12" r="1.7"/></svg><span>Settings</span></button><label class="fe-name"><span>Name</span><input data-net="name" maxlength="16" placeholder="Breacher" autocomplete="off" spellcheck="false"></label></div>
       </header>
       <main class="fe-body">
         <section class="fe-screen fe-home" data-s="home" aria-label="Saltline">
@@ -768,9 +833,10 @@
             <div class="fe-go"><button type="button" class="fe-cta" data-act="join"><span>Join match</span><small data-fe="r-sub"></small></button><p class="fe-status" role="status"></p></div>
           </div>
           <div class="fe-col">
-            <div class="fe-k">Map</div>
-            <div class="fe-maps one" data-fe="r-map"></div>
-            <p class="fe-note">The map is set when the room is made. For another map, make a new room.</p>
+            <div class="fe-k" id="fe-r-map">Map</div>
+            <div class="fe-maps" role="group" aria-labelledby="fe-r-map" data-fe="r-maps"></div>
+            <div class="fe-confirm" data-fe="map-ask" role="alert" hidden><p data-fe="map-ask-t"></p><div><button type="button" class="fe-btn primary" data-act="map-yes">Change map</button><button type="button" class="fe-btn" data-act="map-no">Keep this map</button></div></div>
+            <p class="fe-note">Anyone in the room can change the map. Everyone in the room moves to it.</p>
             <div class="fe-k">Gun</div>
             <div data-fe="gun-slot"></div>
           </div>
@@ -818,6 +884,7 @@
     /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
        whoever goes looking. Add a new entry at the top with each release. */
     const UPDATES = [
+      ['18 Nov 2026', ['Vaulting: jump while running at a low wall, a barrier, a crate or a window sill and you go over it, through the window, or up onto it when it is higher than your chest. It keeps your speed, finds a window without lining up on it exactly, and puts your hands on the ledge; other players see you climb', 'Peeking (Q / E) now shows your soldier as far out as you can see: no more seeing round a corner while staying hidden', 'Reloading the page takes you straight back into the match you were in', 'Through the sniper scope Z steps the zoom (2x, 4x, 6x, 10x), so it works while you move', 'No fall damage from any drop under about 5 m: jump or vault out of an upstairs window', 'Alpine: two houses on the street can be entered, with a stair up to a room with a wide window; a stair to a veranda in the ruin by the well sign; a doorway into the stone ruin from the alley; the stone blocks and crates stand 1.35 to 1.95 m and are spread across the lanes; upstairs windows can be vaulted out of', 'A room\'s map can be changed from its lobby: everyone in the room moves to the new map together', 'Settings at the top of every menu screen', 'The pause screen of a room shows its code and a Copy link button of their own', 'Touch screens: move, resize and fade every button (Settings, Touch controls)', 'Phones held sideways: the first screen fits without scrolling']],
       ['17 Nov 2026', ['A new front end: Quick play, Private match and Solo mission, each with its own screen', 'Quick play: pick Team deathmatch or Deathmatch, a map and a gun, then Find match', 'Maps are picked from pictures of them seen from above', 'Rooms have a lobby: the code to share, the map, both modes, and who is on which team',
         'Team deathmatch is Red against Blue, and you pick your side: in a room, or after Find match in Quick play', 'In Team deathmatch every helmet is its team\'s colour', 'Fullscreen at the bottom right of every menu screen and of the pause screen', 'Solo: a Main menu button in the pause menu of a mission']],
       ['17 Nov 2026', ['Ten seconds between rounds: the result stays up with a countdown, nobody moves and nobody can be hurt, then everyone starts fresh']],
@@ -970,8 +1037,7 @@
       modeRows($('[data-fe="r-modes"]'), () => pick.roomMode, v => { pick.roomMode = v; roomModeSet = true; }, counts);
       $('[data-fe="code"]').textContent = session.code || '';
       $('[data-fe="count"]').textContent = ok ? all.length + '/' + MAX : 'Connecting';
-      const mapHost = $('[data-fe="r-map"]');
-      if (mapHost.dataset.map !== pick.roomMap) { mapHost.dataset.map = pick.roomMap; mapHost.textContent = ''; mapHost.appendChild(mapCard(pick.roomMap, null)); }
+      mapCards($('[data-fe="r-maps"]'), () => pick.askMap || pick.roomMap, askMap);
       const tdm = pick.roomMode === 'tdm', teams = $('[data-fe="teams"]');
       const sig = [pick.roomMode, ok, busy, all.map(e => [e.n, e.m, e.tm, e.k, e.c, e.me].join(',')).join(';')].join('|');
       if (sig !== teamSig) {
@@ -986,6 +1052,37 @@
       // Team deathmatch has no Join match: each player picks Red or Blue
       const join = $('[data-act="join"]'); join.hidden = tdm; join.disabled = busy || !ok;
     }
+    /* The room's map. Anyone in the lobby can change it; the server tells everyone and every page reloads into the new map,
+       back in this lobby, so nobody in the room plays another map. If others are in a match, it asks first. */
+    let mapWait = 0;
+    function askMap(id) {
+      const ask = $('[data-fe="map-ask"]');
+      if (id === pick.roomMap || !room || !room.connected()) { pick.askMap = ''; ask.hidden = true; return; }
+      const playing = people().filter(e => !e.me && (e.m === 'dm' || e.m === 'tdm')).length;
+      if (!playing) { changeMap(id); return; }
+      pick.askMap = id;
+      $('[data-fe="map-ask-t"]').textContent = (playing === 1 ? '1 player is' : playing + ' players are') + ' in a match. Changing to ' + maps.name(id) + ' ends it and brings everyone back here.';
+      ask.hidden = false;
+    }
+    function changeMap(id) {
+      pick.askMap = ''; $('[data-fe="map-ask"]').hidden = true;
+      if (!id || !room || !room.setMap(id)) { status('Not connected to the room. Try again in a moment.', 'err'); paint(); return; }
+      setBusy(true); status('Moving the room to ' + maps.name(id) + '…', 'busy');
+      clearTimeout(mapWait); mapWait = setTimeout(() => { setBusy(false); status('The map did not change. Try again.', 'err'); paint(); }, 8000);
+    }
+    // the game's own settings panel, opened from these screens: the menu steps aside until the panel closes
+    let inSettings = false;
+    function openSettings() {
+      const b = document.querySelector('#ui .m-screen[data-s="title"] [data-act="settings"]'), panel = document.querySelector('#ui .panel');
+      if (!b || !panel || gameState() !== 'title') { status('Settings open once the game has loaded.', 'err'); return; }
+      inSettings = true; document.documentElement.classList.add('net-settings'); gate.hidden = true; b.click();
+      const wait = setInterval(() => {
+        if (!panel.hidden) return;
+        clearInterval(wait); inSettings = false; document.documentElement.classList.remove('net-settings');
+        gate.hidden = false; const back = $('[data-act="settings"]'); if (back) back.focus({ preventScroll: true });
+      }, 120);
+    }
+
     // one team: its name in its colour, its kills, who is on it, and the button to join it
     function teamBox(host, title, css, list, tdm, team, ok) {
       const d = document.createElement('div'); d.className = 'fe-team' + (list.some(e => e.me) ? ' mine' : '');
@@ -1049,6 +1146,7 @@
       joining = true;
       const ok = await press(mode === 'dm' ? '.mp-lobby [data-mp="join-dm"]' : `.mp-lobby [data-mp="join-t${team}"]`, 30000);
       joining = false;
+      if (ok && (session.kind === 'public' || session.kind === 'private')) resume.set({ kind: session.kind, code: session.code, mode, team, map: mapId() });
       return ok;
     }
 
@@ -1157,8 +1255,11 @@
       else if (a === 'create') createRoom();
       else if (a === 'join') joinFromRoom(-1);
       else if (a === 'back') back();
-      else if (a === 'leave') location.assign('/');
+      else if (a === 'leave') { resume.clear(); location.assign('/'); }
       else if (a === 'copy') copyInvite(b, 'Copy invite');
+      else if (a === 'map-yes') changeMap(pick.askMap);
+      else if (a === 'map-no') { pick.askMap = ''; $('[data-fe="map-ask"]').hidden = true; paint(); }
+      else if (a === 'settings') openSettings();
     });
     // the room's invite link to the clipboard; the button says so for a moment. Where the clipboard is refused, the button
     // shows the link itself so it can be read out
@@ -1191,7 +1292,8 @@
     (function hook() {
       const g = G();
       if (!g || !g.events || typeof g.events.on !== 'function') { setTimeout(hook, 200); return; }
-      g.events.on('game:state', e => { if (e && e.state === 'title' && (session.kind === 'public' || session.kind === 'private') && !joining) showGate(); });
+      g.events.on('game:state', e => { if (e && e.state === 'title' && (session.kind === 'public' || session.kind === 'private') && !joining && !inSettings) { resume.clear(); showGate(); } });
+      setInterval(() => { if (gameState() === 'playing' || gameState() === 'paused') resume.touch(); }, 5000);   // still in the match: keep the way back fresh
     })();
 
     // /api/online -> { online, dm: {players, matches}, rooms: {players, rooms} }, or null when the server can't be reached
@@ -1263,7 +1365,7 @@
       voiceRow();
       const st = gameState(), onTitle = st === 'title';
       // after a quick-play match the game drops back to its title: this screen is home
-      if ((session.kind === 'public' || session.kind === 'private') && onTitle && !joining) showGate();
+      if ((session.kind === 'public' || session.kind === 'private') && onTitle && !joining && !inSettings) showGate();
       if (fsBtn.hidden === fsWanted()) fsBtn.hidden = !fsWanted();
       if (screen === 'room' && !gate.hidden) paintRoom();
       if (screen === 'team' && !gate.hidden) paintTeam();
@@ -1277,14 +1379,18 @@
         b.addEventListener('click', ev => { ev.stopPropagation(); location.assign('/'); });
         pauseActs.appendChild(b);
       }
-      // a private room: its invite link from the pause menu, so friends can be brought in mid-match
-      const inviteActs = session.kind === 'private' && session.code && document.querySelector('#ui [data-s="paused"] .m-actions');
-      if (inviteActs && !inviteActs.querySelector('[data-net-invite]')) {
-        const label = 'Copy invite link · ' + session.code;
-        const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.dataset.netInvite = '1'; b.textContent = label;
-        b.addEventListener('click', ev => { ev.stopPropagation(); copyInvite(b, label); });
-        const resume = inviteActs.querySelector('[data-act="resume"]');
-        if (resume) resume.after(b); else inviteActs.appendChild(b);
+      // a private room: its code and invite link on the pause screen, in a block of its own above the game's buttons
+      const paused = session.kind === 'private' && session.code && document.querySelector('#ui [data-s="paused"]');
+      if (paused && !paused.querySelector('.net-invite')) {
+        const acts = paused.querySelector('.m-actions');
+        if (acts) {
+          const box = document.createElement('div'); box.className = 'net-invite';
+          box.innerHTML = '<span><small>Invite to this room</small><b></b></span><button type="button" class="btn small">Copy link</button>';
+          box.querySelector('b').textContent = session.code;
+          const b = box.querySelector('button');
+          b.addEventListener('click', ev => { ev.stopPropagation(); copyInvite(b, 'Copy link'); });
+          acts.before(box);
+        }
       }
       const room = document.querySelector('[data-net-room]');
       const roomText = session.code && session.kind !== 'dead' ? (session.kind === 'public' ? 'Open match' : 'Room ' + session.code) + ' · ' + maps.name(mapId()) : 'Online room';
@@ -1308,6 +1414,12 @@
         startRoom(code, 'private');
         show('room'); gate.hidden = false;
         if (room) room.onPeers(() => { if (screen === 'room' && !gate.hidden) paintRoom(); });
+        const again = resume.get();
+        if (again && again.kind === 'private' && again.code === code) {   // reloaded in the middle of this room's match: straight back in
+          pick.roomMode = again.mode === 'dm' ? 'dm' : 'tdm'; roomModeSet = true;
+          setBusy(true); status('Back into the match…', 'busy');
+          joinMatch(again.mode, again.team).then(ok => { setBusy(false); if (ok) { gate.hidden = true; status(''); } else { resume.clear(); status('Could not get back into the match. Join it again.', 'err'); paintRoom(); } });
+        }
         // maps.js already asked this room for its map before the game started; if that answer came too late, load the right map now
         Promise.all([fetch('/api/rooms/' + code).then(r => r.json()), maps.ready]).then(([info, now]) => {
           if (info && info.exists && info.map && info.map !== now && maps.list.some(m => m.id === info.map)) { visit(info.map, '/r/' + code); return; }
@@ -1316,6 +1428,14 @@
         return;
       }
       if (location.search) history.replaceState(null, '', '/');
+      const again = !play && resume.get();
+      if (again && again.kind === 'public' && CODE_RE.test(again.code)) {   // reloaded in the middle of a quick-play match: back into the same one
+        if (again.map !== mapId() && maps.list.some(m => m.id === again.map)) { visit(again.map, '/'); return; }
+        pick.mode = again.mode; show('quick'); gate.hidden = false; setBusy(true); status('Back into the match…', 'busy');
+        startRoom(again.code, 'public'); session.mode = again.mode;
+        joinMatch(again.mode, again.team).then(ok => { setBusy(false); if (ok) { gate.hidden = true; status(''); } else { resume.clear(); status('Could not get back into the match. Find another.', 'err'); } });
+        return;
+      }
       if (play === 'dm' || play === 'tdm') { pick.mode = play; show('quick'); gate.hidden = false; quickPlay(play); }
       else if (play === 'solo') { show('home'); gate.hidden = false; solo(); }
       else { show('home'); gate.hidden = false; }
@@ -1323,6 +1443,19 @@
     if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
 
     return {
+      roomMap(map, by, hello) {
+        if (session.kind !== 'private' || !maps.list.some(m => m.id === map)) return;
+        if (map === mapId()) { pick.roomMap = map; if (screen === 'room') paint(); return; }
+        const code = session.code;
+        if (hello) { visit(map, '/r/' + code); return; } // the room moved while this page was away
+        const p = by && by !== peerId && room ? room.get(by) : null;
+        const who = by === peerId ? 'You' : p && p.presence && typeof p.presence.n === 'string' && p.presence.n.trim() ? p.presence.n.trim().slice(0, 16) : 'Someone';
+        const st = gameState();
+        if (st === 'playing' || st === 'paused') { hudMsg(who + ' changed the map to ' + maps.name(map) + '. Moving the room there', 3); setTimeout(() => visit(map, '/r/' + code), 2500); return; }
+        clearTimeout(mapWait);
+        if (!gate.hidden && screen === 'room') { setBusy(true); status((who === 'You' ? 'Moving' : who + ' changed the map. Moving') + ' the room to ' + maps.name(map) + '…', 'busy'); }
+        visit(map, '/r/' + code);
+      },
       count(n) { if (n !== count) { count = n; if (screen === 'room' && !gate.hidden) paintRoom(); } },
       fatal(why) {
         const { code, kind } = session, mode = session.mode || 'dm';
