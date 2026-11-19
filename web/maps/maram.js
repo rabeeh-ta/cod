@@ -742,19 +742,72 @@ void main(){
     return { count: spots.length, tris: (TI.length + LI.length) / 3, update(t) { sway.value = t; } };
   }
 
-  /* Ramps are stairs of 25 cm columns to the game's physics (it collides with boxes only), so walking one moved the eye
-     up or down a few centimetres at each column: it felt jagged. The eye is drawn on a short smoothed path instead,
-     only for the drawing (the player and every shot keep the exact height). Jumps, falls and respawns are not smoothed. */
-  function smoothEye(G) {
-    let y = null, last = performance.now();
+  /* Ramps and stairs are stairs of 25 cm columns to the game's physics (it collides with boxes only), so walking them
+     moved the player up or down a few centimetres every few frames. Smoothing that over time made the view trail
+     behind and still stutter, which felt like lag. So the eye is drawn at the model's real floor averaged over a small
+     circle round the feet (13 points out to 60 cm, only floor within 45 cm of the feet counts, so walls and drops do not
+     pull it): on a slope that is the slope itself, on stairs a ramp over them, and it moves exactly with the player.
+     It is only for the drawing: the player's real height, jumps and every shot are the game's own. In the air the
+     difference fades out in a tenth of a second, and comes back as fast on landing. */
+  /* The model's own floors (every triangle facing up), filed on a 1 m grid: the height of the real surface at a point,
+     where the boxes only know steps of 25 cm. */
+  function floorIndex(T, meshes) {
+    const C = 1, X0 = BOUNDS.x0 - 4, Z0 = BOUNDS.z0 - 4, W = Math.ceil((BOUNDS.x1 - BOUNDS.x0 + 8) / C), D = Math.ceil((BOUNDS.z1 - BOUNDS.z0 + 8) / C);
+    const cells = Array.from({ length: W * D }, () => []), tris = [], a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3(), e1 = new T.Vector3(), e2 = new T.Vector3();
+    for (const m of meshes) {
+      const P = m.geometry.attributes.position, I = m.geometry.index, n = I ? I.count : P.count;
+      for (let t = 0; t + 2 < n; t += 3) {
+        a.fromBufferAttribute(P, I ? I.getX(t) : t); b.fromBufferAttribute(P, I ? I.getX(t + 1) : t + 1); c.fromBufferAttribute(P, I ? I.getX(t + 2) : t + 2);
+        e1.subVectors(b, a); e2.subVectors(c, a); e1.cross(e2); const len = e1.length();
+        if (len < 1e-8 || Math.abs(e1.y) / len < 0.6) continue;                 // walls, and anything steeper than about 53 degrees
+        const k = tris.length / 9; tris.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+        const i0 = Math.max(0, Math.floor((Math.min(a.x, b.x, c.x) - X0) / C)), i1 = Math.min(W - 1, Math.floor((Math.max(a.x, b.x, c.x) - X0) / C));
+        const j0 = Math.max(0, Math.floor((Math.min(a.z, b.z, c.z) - Z0) / C)), j1 = Math.min(D - 1, Math.floor((Math.max(a.z, b.z, c.z) - Z0) / C));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) cells[j * W + i].push(k);
+      }
+    }
+    const TR = new Float32Array(tris);
+    // the highest floor between lo and hi straight under (x, z), or NaN
+    return (x, z, lo, hi) => {
+      const i = Math.floor((x - X0) / C), j = Math.floor((z - Z0) / C); if (i < 0 || j < 0 || i >= W || j >= D) return NaN;
+      let best = NaN;
+      for (const k of cells[j * W + i]) {
+        const o = k * 9, x1 = TR[o], z1 = TR[o + 2], x2 = TR[o + 3], z2 = TR[o + 5], x3 = TR[o + 6], z3 = TR[o + 8];
+        const det = (z2 - z3) * (x1 - x3) + (x3 - x2) * (z1 - z3); if (Math.abs(det) < 1e-9) continue;
+        const l1 = ((z2 - z3) * (x - x3) + (x3 - x2) * (z - z3)) / det, l2 = ((z3 - z1) * (x - x3) + (x1 - x3) * (z - z3)) / det, l3 = 1 - l1 - l2;
+        if (l1 < -1e-4 || l2 < -1e-4 || l3 < -1e-4) continue;
+        const h = l1 * TR[o + 1] + l2 * TR[o + 4] + l3 * TR[o + 7];
+        if (h >= lo && h <= hi && !(h <= best)) best = h;
+      }
+      return best;
+    };
+  }
+  function smoothEye(G, meshes) {
+    const ph = G.physics, RING = [[0, 0, 2]], surface = floorIndex(G.THREE, meshes);
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; RING.push([Math.cos(a) * 0.3, Math.sin(a) * 0.3, 1.5], [Math.cos(a + 0.52) * 0.6, Math.sin(a + 0.52) * 0.6, 1]); }
+    let off = 0, grounded = false, last = performance.now(), base = 0, wrote = NaN;
+    // the floor averaged round the feet: the model's real surface where it has one, else the top of the boxes there
+    const floorAt = (x, y, z) => {
+      let sum = 0, w = 0;
+      for (const [dx, dz, k] of RING) {
+        let h = surface(x + dx, z + dz, y - 0.45, y + 0.45);
+        if (Number.isNaN(h)) { h = ph.groundHeight(x + dx, z + dz, y + 0.45); if (!(h > y - 0.45)) continue; }
+        sum += h * k; w += k;
+      }
+      return w ? sum / w : y;
+    };
     G.render.addPrePass(() => {
       const P = G.player, cam = G.camera, now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now;
-      if (!P || !P.alive || !cam) { y = null; return; }
-      const target = cam.position.y;
-      if (y === null || !P.onGround || Math.abs(target - y) > 0.45) { y = target; return; }
-      y += (target - y) * (1 - Math.exp(-dt * 16));
-      if (Math.abs(target - y) > 0.18) y = target - Math.sign(target - y) * 0.18;
-      cam.position.y = y; cam.updateMatrixWorld(true);
+      if (!P || !P.alive || !cam || !P.pos) { off = 0; wrote = NaN; return; }
+      // the height the game put the eye at this frame; when it did not set it again (paused, or a frame drawn twice),
+      // the camera still holds what was written here, and the offset must not be added on top of it once more
+      if (cam.position.y !== wrote) base = cam.position.y;
+      const want = P.onGround ? Math.max(-0.3, Math.min(0.3, floorAt(P.pos.x, P.pos.y, P.pos.z) - P.pos.y)) : 0;
+      // on the ground the average is taken as it is (it moves with the feet, so there is nothing to wait for); only
+      // leaving the ground and landing are eased, so a jump does not start or end with a jolt
+      if (P.onGround && grounded) off = want; else off += (want - off) * (1 - Math.exp(-dt * (P.onGround ? 30 : 20)));
+      grounded = !!P.onGround;
+      cam.position.y = wrote = base + off; cam.updateMatrixWorld(true);
     });
   }
 
@@ -773,7 +826,7 @@ void main(){
     // round the low sun, and contact shadow in the corners
     if (G.render.tune) Object.assign(G.render.tune, { aoIntensity: 1.55, aoRadius: 1.1, volSunScale: 1.15, flare: 0.12, bloom: 0.08, key: 0.24, maxExposure: 2.4 });
     const air = makeAir(G), motes = makeMotes(G, root), beams = makeBeams(G, root), palms = makePalms(G, root, data.bounds); motes.air = air;
-    smoothEye(G);
+    smoothEye(G, root.children.filter(m => m.isMesh && m.name.startsWith('maram:material')));
     // the light of the sky in the shade, and the same for the gun in the hands. No fill light from the other side: it
     // had no source and cast no shadow, so it lit faces the sun could not reach (a crate in a wall's shadow glowed)
     const hemi = new T.HemisphereLight(new T.Color(0.74, 0.82, 1.0), new T.Color(0.86, 0.66, 0.42), 0.6);
