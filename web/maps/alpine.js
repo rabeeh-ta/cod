@@ -123,7 +123,7 @@
   }
   const groundKind = (x, z) => (cobbleAt(x, z) > 0.5 ? 'cobble' : turfAt(x, z) > 0.5 ? 'turf' : 'dirt');
   const VERANDAS = [];   // [x0, z0, x1, z1] of each veranda, filled as the houses are built
-  /* Bushes: [x, z, radius]. Leaves to look at, and a block as wide and high as the leaves, so nobody walks into one. */
+  /* Bushes: [x, z, radius]. Leaves to look at, and nothing more: players walk through them and shots pass. */
   const BUSHES = [[-9.2, -7.5, 0.9], [8.2, -7, 0.8], [-9, -22, 1.0], [7.5, -17, 0.9], [-34.6, 20.5, 1.0], [-26.5, 14.6, 0.8], [-34.8, -15, 0.9], [-12.4, -24.6, 0.9], [2, -24.8, 0.8], [26.8, 3.4, 0.7], [-22.4, 12.4, 0.7], [20.2, -3.6, 0.6], [8.6, 12.5, 0.6]];
 
   /* ------------------------------------------------------------------ before the game reads its constants */
@@ -781,8 +781,8 @@
     /* ---- trees on the green and in the gardens: a trunk you can stand behind, and a crown of leaves (which stops nothing) */
     const trees = [[-7, -20, 1.0], [5, -10, 1.15], [-4, -23.5, 0.85], [-30, 21, 1.0], [-33.5, 9.5, 0.8]];
     for (const [x, z, s] of trees) solid('bark', x - 0.22 * s, 0, z - 0.22 * s, x + 0.22 * s, Math.max(3.5, 3.7 * s), z + 0.22 * s, { tint: [1, 0.96, 0.9] });
-    for (const [x, z, rad] of BUSHES) { const k = ph.addBox([x - rad * 0.95, 0, z - rad * 0.95], [x + rad * 0.95, Math.min(1.9, rad * 1.5 + 0.4), z + rad * 0.95], { surface: 'wood', playerOnly: true, noNav: true }); if (k) k.noVault = true; }
-    // a bush stops people as wide and as high as its leaves go, so nobody stands inside one and sees out through leaves that hide them; nobody vaults over leaves either
+    // bushes stop nothing: players walk through the leaves and shots go through them (Irfan, 19 Nov 2026). They used to be a
+    // block for players as wide and high as the leaves
 
     /* ---- where a new life begins: on open ground, all round the village */
     for (const [x, z] of [[-34, 0], [-34.5, 15.5], [-30, -22], [-21.5, 8], [-21.5, -16], [-27, 15.8], [-14, 15.6], [-6.5, 15.6], [-6.5, 8], [1, 15.6], [8.5, 8], [14, 15.6], [26.2, 15.4], [25, 9], [24.5, 0], [24, -9], [21.5, -14.5],
