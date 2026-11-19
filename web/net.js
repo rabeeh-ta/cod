@@ -1473,3 +1473,58 @@
     };
   })();
 })();
+
+/* Crouch: hold or toggle (Settings, Crouch). Some players hold the key to stay down; others press it once to go down and
+   once more to stand. The game itself only knows "held", so in toggle mode the input's crouch is replaced, every frame,
+   by a state that flips on each press of any crouch key or button (keyboard, controller, touch: whatever the game counts
+   as crouch). Pressing jump or starting a sprint stands the player up, as in other shooters, and going down clears it.
+   The game still keeps a crouched player down under a low ceiling. The choice is kept in this browser. */
+(() => {
+  'use strict';
+  const KEY = 'saltline.crouch';
+  let mode = 'hold', down = false, was = { crouch: false, jump: false, sprint: false };
+  try { if (localStorage.getItem(KEY) === 'toggle') mode = 'toggle'; } catch { /* private mode: hold */ }
+  function setMode(m) {
+    mode = m === 'toggle' ? 'toggle' : 'hold'; down = false;
+    try { localStorage.setItem(KEY, mode); } catch { /* private mode */ }
+    mark();
+  }
+  // the game's input: its per-frame update is wrapped once the game has made it
+  function hook() {
+    const G = window.__G, inp = G && G.input;
+    if (!inp || inp.__crouchMode || typeof inp.update !== 'function' || typeof inp.down !== 'function') return;
+    const update = inp.update;
+    inp.update = function () {
+      const r = update.apply(this, arguments), P = G.player;
+      const held = { crouch: !!this.down('crouch'), jump: !!this.down('jump'), sprint: !!this.sprint };
+      if (mode === 'toggle') {
+        if (!P || !P.alive) down = false;
+        else {
+          if (held.crouch && !was.crouch) down = !down;
+          if (down && ((held.jump && !was.jump) || (held.sprint && !was.sprint))) down = false;
+        }
+        this.crouch = down;
+      }
+      was = held;
+      return r;
+    };
+    inp.__crouchMode = true;
+  }
+  // Settings: a "Crouch" row of two, Hold and Toggle, under Invert Y, drawn like the game's own choices
+  function row() {
+    const inv = document.querySelector('.panel [data-act="invert"]'), r0 = inv && inv.closest('.row');
+    if (!r0) return;
+    if (!document.getElementById('crouch-row')) {
+      const r = document.createElement('div'); r.className = 'row'; r.id = 'crouch-row';
+      r.innerHTML = '<label id="l-crouch">Crouch</label><div class="seg" role="group" aria-labelledby="l-crouch">' +
+        '<button type="button" data-crouch="hold" aria-pressed="false">Hold</button><button type="button" data-crouch="toggle" aria-pressed="false">Toggle</button></div>';
+      r.addEventListener('click', ev => { const b = ev.target.closest('button[data-crouch]'); if (!b) return; ev.stopPropagation(); setMode(b.dataset.crouch); });
+      r0.after(r);
+    }
+    mark();
+  }
+  function mark() { for (const b of document.querySelectorAll('#crouch-row button[data-crouch]')) b.setAttribute('aria-pressed', String(b.dataset.crouch === mode)); }
+  const tick = () => { hook(); row(); };
+  setInterval(tick, 500); tick();
+  window.__saltlineCrouch = { get mode() { return mode; }, set: setMode };
+})();

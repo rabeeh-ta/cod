@@ -12,6 +12,8 @@ Above them is the **Map** picker: **Saltline Terminal** (the harbour), **Colosse
 
 Voice chat works in every online match. Press **V** (or the MIC button on touch) to talk. You hear the players in your match, and in Team play only your own team. **Settings → Voice chat volume** sets how loud other players are, from 0 to 400% (200% to start).
 
+**Settings → Crouch** chooses how the crouch key works: **Hold** (down while held, the default) or **Toggle** (press once to go down, again to stand; jumping or starting a sprint also stands you up). The choice is kept in the browser.
+
 ## Run it
 
 ```sh
