@@ -60,6 +60,12 @@ export function applyMapHooks(html) {
     hook(new RegExp(`"${line}"`), () => `(${MAP}&&${MAP}.boot&&${MAP}.boot[${i}]||"${line}")`, `the "${line}" loading line`);
   });
 
+  // 7. the whole map on the pause screen (web/fullmap.js) shows what the minimap shows: your team in Team deathmatch, and
+  //    an opponent for a few seconds after they fire. The minimap reads the other players from the multiplayer layer's
+  //    own table; this hands the same table out, read only, beside the minimap's settings
+  hook(/\n    const MAP = \{ range: 30, cell: \.5 \};\n/,
+    m => `${m}    window.__SALTLINE_MATCH = { get live() { return !!mp.live; }, get mode() { return mp.mode; }, get team() { return mp.team; }, players: () => remotes.values() };\n`, 'the minimap settings');
+
   return html;
 }
 

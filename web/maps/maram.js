@@ -796,7 +796,12 @@ void main(){
       }
       return w ? sum / w : y;
     };
-    G.render.addPrePass(() => {
+    // run just before each frame is drawn, not as a pre-pass: the frame copies the camera into the one that draws the gun
+    // and arms before its pre-passes run, so an eye moved there left the gun behind at the old height, jumping by every
+    // 25 cm step the eye no longer showed
+    const frame = G.render.frame;
+    G.render.frame = function () { place(); return frame.apply(this, arguments); };
+    function place() {
       const P = G.player, cam = G.camera, now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now;
       if (!P || !P.alive || !cam || !P.pos) { off = 0; wrote = NaN; return; }
       // the height the game put the eye at this frame; when it did not set it again (paused, or a frame drawn twice),
@@ -808,7 +813,7 @@ void main(){
       if (P.onGround && grounded) off = want; else off += (want - off) * (1 - Math.exp(-dt * (P.onGround ? 30 : 20)));
       grounded = !!P.onGround;
       cam.position.y = wrote = base + off; cam.updateMatrixWorld(true);
-    });
+    }
   }
 
   /* ------------------------------------------------------------------ the level */

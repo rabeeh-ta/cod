@@ -291,6 +291,12 @@ export function applyGunHooks(html) {
   //     than anything a player can stand on), and less for each m/s past it.
   swap('Y>13&&A.damage((Y-13)*7,null)', 'Y>16&&A.damage((Y-16)*5,null)', 'fall damage only past a 5 m drop');
 
+  // 20. the wheel swaps weapons while sprinting too. Holding Shift turns a mouse wheel's turn into a sideways scroll (the
+  //     browser reports it as deltaX, deltaY 0), and the game looked at deltaY only, so the knife could not be drawn on
+  //     the run. With Shift down either direction counts; without it a sideways swipe still does nothing.
+  hook(rx('Math\\.abs\\((§)\\.deltaY\\)<1\\|\\|\\((§)=(§),(§)\\.add\\("swap"\\)\\)'),
+    (m, ev) => m.replace(`Math.abs(${ev}.deltaY)<1`, `(${ev}.shiftKey?Math.max(Math.abs(${ev}.deltaY),Math.abs(${ev}.deltaX)):Math.abs(${ev}.deltaY))<1`), 'the wheel that swaps weapons');
+
   return html;
 }
 

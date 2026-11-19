@@ -7,15 +7,15 @@
      dictation   -> drives VOICE CHAT. The game's mic key (V), its touch MIC button and its "Mic on/off" HUD all
                     work as before, but instead of speech-to-text the mic now goes out as live audio (WebRTC,
                     peer to peer, signalled through the room's Durable Object, STUN/TURN from Cloudflare)
-     tts         -> speechSynthesis, reads typed radio messages aloud
-     db          -> not provided (the original only used it for connection diagnostics)
+     tts, db     -> not provided (typed radio, which tts read aloud, is gone; db was only for connection diagnostics)
    It also owns the front end around the matches: home, quick play, private match and the room lobby.
    Loaded as a plain <script> right before the multiplayer layer, so window.claude exists when that layer starts.
-   It brings in touch.js too: the layout editor for the touch buttons (Settings → Touch controls). */
+   It brings in touch.js too: the layout editor for the touch buttons (Settings → Touch controls), and fullmap.js: the
+   whole map in the top right corner of the pause screen. */
 (() => {
   'use strict';
 
-  { const s = document.createElement('script'); s.src = '/touch.js'; s.async = true; document.head.appendChild(s); }
+  for (const src of ['/touch.js', '/fullmap.js']) { const s = document.createElement('script'); s.src = src; s.async = true; document.head.appendChild(s); }
 
   const CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
   const MAX = 10;
@@ -407,29 +407,6 @@
     };
   }
 
-  function makeTts() {
-    if (!('speechSynthesis' in window)) return null;
-    const S = window.speechSynthesis;
-    const VOICES = { buttery: { pitch: .85, rate: 1 }, airy: { pitch: 1.25, rate: 1.05 }, glassy: { pitch: 1.05, rate: 1.12 }, rounded: { pitch: .7, rate: .95 } };
-    const names = Object.keys(VOICES);
-    return {
-      add(items) {
-        const lang = (navigator.language || 'en').slice(0, 2);
-        const vs = S.getVoices().filter(v => v.lang && v.lang.startsWith(lang));
-        for (const it of items || []) {
-          const u = new SpeechSynthesisUtterance(String(it && it.text || '').slice(0, 200));
-          const o = VOICES[it && it.voice] || {};
-          u.pitch = o.pitch || 1; u.rate = o.rate || 1;
-          const i = names.indexOf(it && it.voice);
-          if (vs.length && i >= 0) u.voice = vs[i % vs.length];
-          S.speak(u);
-        }
-        return Promise.resolve();
-      },
-      stop() { S.cancel(); return Promise.resolve(); },
-    };
-  }
-
   let resolveRoom;
   const roomReady = new Promise(r => { resolveRoom = r; });
   const session = { kind: '', code: '' }; // kind: '' (choosing) | 'public' | 'private' | 'solo' | 'dead'
@@ -445,7 +422,7 @@
     voice.bind(room);
     resolveRoom(room);
   }
-  const tts = makeTts(), voiceMic = makeVoiceMic();
+  const voiceMic = makeVoiceMic();
   window.__net = { session, voice: () => voice.debug() }; // for the console: __net.voice()
   const user = { id: () => Promise.resolve(uid), profiles: () => Promise.resolve({}) };
 
@@ -456,7 +433,6 @@
         case 'user': return Promise.resolve(user);
         case 'permissions': return Promise.resolve(permissions);
         case 'dictation': return roomReady.then(r => (r && voice.supported ? voiceMic : null));
-        case 'tts': return Promise.resolve(tts);
         default: return Promise.resolve(null);
       }
     },
@@ -884,6 +860,7 @@
     /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
        whoever goes looking. Add a new entry at the top with each release. */
     const UPDATES = [
+      ['19 Nov 2026', ['A fourth map: Maram, a walled desert town under rocky hills in the morning sun, with two sites, a long road and tunnels', 'The whole map in the top right corner of the pause screen: where you are and the way you face, your team in Team deathmatch, the ammo sets, and anyone who has just fired', 'Settings → Crouch: hold the key, or press it once to go down and again to stand', 'The mouse wheel changes weapon while you sprint', 'Maram: smooth over slopes and stairs, the gun included', 'Typed radio (T) is gone; voice chat (V) stays']],
       ['18 Nov 2026', ['Vaulting: jump while running at a low wall, a barrier, a crate or a window sill and you go over it, through the window, or up onto it when it is higher than your chest. It keeps your speed, finds a window without lining up on it exactly, and puts your hands on the ledge; other players see you climb', 'Peeking (Q / E) now shows your soldier as far out as you can see: no more seeing round a corner while staying hidden', 'Reloading the page takes you straight back into the match you were in', 'Through the sniper scope Z steps the zoom (2x, 4x, 6x, 10x), so it works while you move', 'No fall damage from any drop under about 5 m: jump or vault out of an upstairs window', 'Alpine: two houses on the street can be entered, with a stair up to a room with a wide window; a stair to a veranda in the ruin by the well sign; a doorway into the stone ruin from the alley; the stone blocks and crates stand 1.35 to 1.95 m and are spread across the lanes; upstairs windows can be vaulted out of', 'A room\'s map can be changed from its lobby: everyone in the room moves to the new map together', 'Settings at the top of every menu screen', 'The pause screen of a room shows its code and a Copy link button of their own', 'Touch screens: move, resize and fade every button (Settings, Touch controls)', 'Phones held sideways: the first screen fits without scrolling']],
       ['17 Nov 2026', ['A new front end: Quick play, Private match and Solo mission, each with its own screen', 'Quick play: pick Team deathmatch or Deathmatch, a map and a gun, then Find match', 'Maps are picked from pictures of them seen from above', 'Rooms have a lobby: the code to share, the map, both modes, and who is on which team',
         'Team deathmatch is Red against Blue, and you pick your side: in a room, or after Find match in Quick play', 'In Team deathmatch every helmet is its team\'s colour', 'Fullscreen at the bottom right of every menu screen and of the pause screen', 'Solo: a Main menu button in the pause menu of a mission']],
@@ -901,7 +878,7 @@
       ['16 Nov 2026', ['A second map: the Colosseum, with a map choice on the first screen', 'The minimap and grenade markers draw again', 'The first screen stays dark with a loading line until the map is ready']],
       ['13 Nov 2026', ['A new round restarts every player: position, health and ammo', 'Louder voice chat with its own volume setting, and louder enemy footsteps']],
     ];
-    const CREDITS = 'Shotgun: "Simple old shotgun" by SuperMopsek (CC BY 4.0). Sniper rifle: "SV-98 | Contract Wars" by xlisov (CC BY-NC 4.0). Ammunition: "Ammo Set" by Guy in a Poncho (CC BY 4.0). All from sketchfab.com. Alpine: wall, roof and ground textures, and the way the grass is drawn, from Valle Morta by Leonxlnx (MIT); the valley is "Alps Field" by Andreas Mischok, polyhaven.com (CC0).';
+    const CREDITS = 'Shotgun: "Simple old shotgun" by SuperMopsek (CC BY 4.0). Sniper rifle: "SV-98 | Contract Wars" by xlisov (CC BY-NC 4.0). Ammunition: "Ammo Set" by Guy in a Poncho (CC BY 4.0). All from sketchfab.com. Alpine: wall, roof and ground textures, and the way the grass is drawn, from Valle Morta by Leonxlnx (MIT); the valley is "Alps Field" by Andreas Mischok, polyhaven.com (CC0). Maram: the town is a model by vrchris, sketchfab.com (CC BY 4.0); the hills and sky are "Klippad Sunrise 2" by Greg Zaal, polyhaven.com (CC0).';
     const logCss = document.createElement('style');
     logCss.textContent = `.net-log { margin-top: 26px; border-top: 1px solid var(--line, rgba(232,228,218,.2)); padding-top: 12px; }
       .net-log summary { cursor: pointer; font: 500 11px/1 var(--f-mono, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--bone-faint, rgba(232,228,218,.4)); list-style: none; }

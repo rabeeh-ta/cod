@@ -12,6 +12,8 @@ Above them is the **Map** picker: **Saltline Terminal** (the harbour), **Colosse
 
 Voice chat works in every online match. Press **V** (or the MIC button on touch) to talk. You hear the players in your match, and in Team play only your own team. **Settings → Voice chat volume** sets how loud other players are, from 0 to 400% (200% to start).
 
+The pause screen shows the whole map in its top right corner: where you are and the way you face, your team in Team play, the two ammo sets, and an opponent for a few seconds after they fire (as the minimap does). It needs room beside the pause menu, so a screen under about 720 px wide does not get it.
+
 **Settings → Crouch** chooses how the crouch key works: **Hold** (down while held, the default) or **Toggle** (press once to go down, again to stand; jumping or starting a sprint also stands you up). The choice is kept in the browser.
 
 ## Run it
@@ -51,6 +53,7 @@ See [CLAUDE.md](CLAUDE.md) for the Cloudflare stack.
 |---|---|---|
 | Game | `web/index.html` | The game, served as a static asset |
 | Network adapter | `web/net.js` | Stands in for the claude.ai runtime the game was written for, plus the first screen and voice (WebRTC, peer to peer) |
+| Pause map | `web/fullmap.js` | The whole map on the pause screen, from the same walk grid as the minimap, north up, with you, your team, the ammo sets and recent shooters |
 | Map choice | `web/maps.js` | Decides which map this page load builds (a link, the room, or the player's last pick) before the game starts |
 | Colosseum | `web/maps/colosseum.js` | The second map: stonework, cover, light and collision, built in code when it is picked |
 | Alpine | `web/maps/alpine.js`, `web/maps/alpine/` | The third map: a war-ruined village. Its houses are built the way Valle Morta builds them (walls as a grid of cells that blasts and collapses take away), and every wall cell a player can reach is also a collision box; roofs and other high parts stop shots as the triangles they are drawn with. Its textures and the 360° photograph of the valley are in the folder |

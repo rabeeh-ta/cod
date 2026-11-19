@@ -12,6 +12,7 @@
 //      so the grenade markers and the minimap after it never drew
 //   8. the hooks that let a second map take over (scripts/map-hooks.mjs)
 //   9. the hooks that let more guns in (scripts/gun-hooks.mjs)
+//  10. no typed radio (the T key and everything it drew, sent and read aloud); voice chat stays
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,6 +46,18 @@ once("hint: 'Kills reset · new round is live'", "hint: 'New round · everyone s
 once("      refillFrags();\n      try { hud.warn(title, 4); } catch { /* fine */ }", "      refillFrags();\n      respawn(false); // a new round is a clean start for everyone: new spawn point, full health, full ammo, down or not\n      try { hud.warn(title, 4); } catch { /* fine */ }", 'the round-over restart');
 once("const kn = knife.on ? 'Rifle' : 'Knife'; if (knifeName.textContent !== kn) knifeName.textContent = kn;",
   "const knifeLabel = knife.on ? 'Rifle' : 'Knife'; if (knifeName.textContent !== knifeLabel) knifeName.textContent = knifeLabel;", 'the knife label in the HUD');
+// 10. no typed radio: the T key, its message line and its hint, its key in Settings > Controls, the lines it sent and
+//     showed, and the lobby's "Radio voice" switch (it read typed lines aloud). Voice chat (V) stays.
+once(/\/\* typed radio: T opens a line at the bottom of the view \*\/\n[\s\S]*?(?=\/\* controls: the key list)/, '', 'the typed radio styles');
+once('\n        <button class="btn small" data-mp="hear" hidden>Radio voice: on</button>', '', 'the radio voice switch');
+once(" { id: 'type', label: 'Radio: type', def: 'KeyT' },", '', 'the typed radio key');
+once("d2.textContent = 'Radio'; dd.innerHTML = '<kbd>T</kbd> type, <kbd>V</kbd> mic on / off';", "d2.textContent = 'Voice chat'; dd.innerHTML = '<kbd>V</kbd> mic on / off';", 'the radio row in Controls');
+once(/if \(!d\) \{ tell\('[^']*\. Type your radio message instead', 4\.5\); openChat\(\); return; \}/,
+  "if (!d) { tell('Voice chat is not available in this browser', 4.5); return; }", 'the mic fallback to typing');
+once(/    const chatEl = el\('div', 'mp-chat'\);[\s\S]*?ev\.code === kb\.type [^\n]*\n/,
+  "    keyWatch.push(() => { micKey.textContent = kn('mic'); try { micHud(); } catch { /* not built yet */ } });\n    function closeChat() { /* typed radio is gone; leaving a match still calls this */ }\n", 'the typed radio line and its key');
+once('\n      if (Array.isArray(pr.v)) for (const v of pr.v) if (Array.isArray(v) && +v[0] > (R.vSeq || 0)) { R.vSeq = +v[0]; heard(R, v[1]); }', '', 'typed radio lines heard');
+once(' v: radio.sent.slice(),', '', 'typed radio lines sent');
 html = applyMapHooks(html);
 html = applyGunHooks(html);
 html = applyPerfHooks(html);
