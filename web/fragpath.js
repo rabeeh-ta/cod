@@ -1,9 +1,10 @@
 /* The path of a cooked grenade, shown while the frag key is held: where it would go if it were let go now.
    What is drawn follows what reads best in other shooters (Critical Ops draws its arc only up to the first thing the
    grenade would hit; PUBG's own guide warns that a long arc misleads, and Apex players trust its landing mark over its
-   line): red dots along the flight up to the first thing it hits, a ring lying on that surface, and a small mark where
-   it ends up after any bounces, which is where it goes off (or comes to rest before the fuse runs out). The two marks show
-   through walls and floors; the dots do not, so what is in the way can still be seen.
+   line): red dots along the flight up to the first thing it hits, a ring lying on that surface, and a target where it
+   ends up after any bounces, which is where it goes off (or comes to rest before the fuse runs out). The target faces the
+   eye and keeps its size on screen at any distance; it and the ring show through walls and floors; the dots do not, so
+   what is in the way can still be seen.
    The throw is the game's own (releaseFrag: from just in front of the eye, at FRAG.speed along the view, FRAG.lift up,
    half the player's run added) and the flight is the game's own steps (stepFrags, in fixed 1/120 s steps since gun hook
    24, with gun hook 22's floor ray), so the dots are where the grenade will be. Only the thrower sees it. The game calls
@@ -14,8 +15,20 @@
   let T = null, dots = null, ring = null, fill = null, endMark = null, geo = null, lastSim = 0, lastStep = 0;
   let pos, vel, dir, o, down, up, tmp;
   const MAX_DOTS = 160, path = [];
+  // the game puts its cook label (Let go to throw, and the fuse bar) just under the crosshair: right where a throw lands on
+  // screen, over the ring and the target. It moves down near the bottom of the view, out of the way of the aim
+  { const st = document.createElement('style'); st.textContent = '.mp-cook { top: auto !important; bottom: calc(96px + var(--sab, 0px)) !important; }'; document.head.appendChild(st); }
   let impact = null, impactN = null, end = null, endN = null;
 
+  // where it goes off: a target (ring and dot, outlined dark so it reads on sky and on stone) that always faces the eye
+  function target() {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d');
+    for (const [w, col] of [[16, 'rgba(11,13,15,.55)'], [9, '#ff3b30']]) { x.lineWidth = w; x.strokeStyle = col; x.beginPath(); x.arc(64, 64, 42, 0, Math.PI * 2); x.stroke(); }
+    x.fillStyle = 'rgba(11,13,15,.55)'; x.beginPath(); x.arc(64, 64, 15, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#ff3b30'; x.beginPath(); x.arc(64, 64, 11, 0, Math.PI * 2); x.fill();
+    const t = new T.CanvasTexture(c); t.needsUpdate = true; return t;
+  }
   function disc() {          // a soft round dot
     const c = document.createElement('canvas'); c.width = c.height = 64;
     const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -32,8 +45,10 @@
     // the marks where it lands are seen through anything (walls, floors, roofs), so a throw over or into a building can be aimed
     const flat = (g, op) => new T.Mesh(g, new T.MeshBasicMaterial({ color: COLOR, transparent: true, opacity: op, depthWrite: false, depthTest: false, side: T.DoubleSide, toneMapped: false, fog: false }));
     ring = flat(new T.RingGeometry(0.34, 0.46, 48), 0.9); fill = flat(new T.CircleGeometry(0.34, 48), 0.22);
-    endMark = flat(new T.RingGeometry(0.1, 0.18, 32), 0.6);
-    for (const m of [dots, ring, fill, endMark]) { m.frustumCulled = false; m.renderOrder = m === dots ? 50 : 60; m.visible = false; G.scene.add(m); }
+    // the same size on screen near and far (about 5% of its height, some 30 px on a laptop), seen through anything
+    endMark = new T.Sprite(new T.SpriteMaterial({ map: target(), transparent: true, depthTest: false, depthWrite: false, sizeAttenuation: false, toneMapped: false, fog: false }));
+    endMark.scale.set(0.11, 0.11, 1);
+    for (const m of [dots, ring, fill, endMark]) { m.frustumCulled = false; m.renderOrder = m === dots ? 50 : m === endMark ? 61 : 60; m.visible = false; G.scene.add(m); }
     // hide when the game stops asking (paused, menus, down)
     dots.onBeforeRender = () => { if (performance.now() - lastStep > 150) hide(); };
   }
@@ -105,7 +120,8 @@
         dots.visible = placeDots() > 0;
         if (impact) { lay(ring, impact, impactN); lay(fill, impact, impactN); } else ring.visible = fill.visible = false;
         // where it ends up, when that is away from the first hit
-        if (end && (!impact || end.distanceTo(impact) > 0.6)) lay(endMark, end, endN); else endMark.visible = false;
+        // where it goes off, always: lifted a little so it sits on the floor rather than in it
+        if (end) { endMark.position.copy(end); endMark.position.y += 0.12; endMark.visible = true; } else endMark.visible = false;
       }
     },
     // for checking from the console: the flight of a throw from where the player is now
