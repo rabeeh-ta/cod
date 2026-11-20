@@ -124,7 +124,7 @@
   const groundKind = (x, z) => (cobbleAt(x, z) > 0.5 ? 'cobble' : turfAt(x, z) > 0.5 ? 'turf' : 'dirt');
   const VERANDAS = [];   // [x0, z0, x1, z1] of each veranda, filled as the houses are built
   /* Bushes: [x, z, radius]. Leaves to look at, and nothing more: players walk through them and shots pass. */
-  const BUSHES = [[8.2, -7, 0.8], [-9, -22, 1.0], [7.5, -17, 0.9], [-34.6, 20.5, 1.0], [-26.5, 14.6, 0.8], [-34.8, -15, 0.9], [-12.4, -24.6, 0.9], [2, -24.8, 0.8], [26.8, 3.4, 0.7], [-22.4, 12.4, 0.7], [20.2, -3.6, 0.6], [8.6, 12.5, 0.6]];
+  const BUSHES = [[-9.2, -7.5, 0.9], [8.2, -7, 0.8], [-9, -22, 1.0], [7.5, -17, 0.9], [-34.6, 20.5, 1.0], [-34.8, -15, 0.9], [-12.4, -24.6, 0.9], [2, -24.8, 0.8], [26.8, 3.4, 0.7], [-22.4, 12.4, 0.7], [20.2, -3.6, 0.6], [8.6, 12.5, 0.6]];
 
   /* ------------------------------------------------------------------ before the game reads its constants */
   function pre(G) {
@@ -713,9 +713,8 @@
         for (let p = u + 0.14; p < u1 - 0.05; p += 0.2) { const h = 0.95 + 0.12 * hash(p * 50, at * 31); alongX ? solid('wood', p, 0.05, at + 0.03, p + 0.1, h, at + 0.055, { tint: [0.6, 0.56, 0.5], only: 'shots' }) : solid('wood', at + 0.03, 0.05, p, at + 0.055, h, p + 0.1, { tint: [0.6, 0.56, 0.5], only: 'shots' }); }
       }
     }
-    fence(-10, -5, 9, -5, 0); fence(9, -5, 9, -12);              // round the green, open to the street in the middle; its west side and the bush
-    // beside it were taken out (Irfan, 20 Nov 2026): they stood in front of the house door there
-    fence(-36, 13.6, -24.5, 13.6, -30);                                                    // the west garden
+    fence(-10, -5, 9, -5, 0); fence(-10, -5, -10, -14); fence(9, -5, 9, -12);              // round the green, open to the street in the middle
+    // the west garden behind n1 has no fence and no bush any more: they stood along the back wall, beside its door (Irfan, 20 Nov 2026)
     // the well on the green: a square kerb of stone with a timber frame over it
     { const x = -1, z = -14; for (const [a, b, c, d] of [[x - 1, z - 1, x + 1, z - 0.7], [x - 1, z + 0.7, x + 1, z + 1], [x - 1, z - 0.7, x - 0.7, z + 0.7], [x + 0.7, z - 0.7, x + 1, z + 0.7]]) solid('stone', a, 0, b, c, 0.9, d, {});
       solid('dark', x - 0.7, 0, z - 0.7, x + 0.7, 0.3, z + 0.7, { flat: true }); post(x - 0.85, z, 3.0, 0.07); post(x + 0.85, z, 3.0, 0.07); beam(x - 1.0, 3.0, z - 0.08, x + 1.0, 3.14, z + 0.08); }
