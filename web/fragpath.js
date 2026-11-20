@@ -62,7 +62,7 @@
         }
       } else pos.addScaledVector(vel, DT);
       let floor = -1e9, fn = null;
-      try { const dn = ph.raycast(o.set(pos.x, pos.y + 0.6, pos.z), down, 2.1); if (dn) { floor = dn.point.y; fn = dn.normal; } } catch { floor = -1e9; }
+      try { const ce = ph.raycast(o.set(pos.x, pos.y, pos.z), up, 0.6), lift = ce ? Math.max(0, ce.dist - 0.02) : 0.6; const dn = ph.raycast(o.set(pos.x, pos.y + lift, pos.z), down, lift + 1.5); if (dn) { floor = dn.point.y; fn = dn.normal; } } catch { floor = -1e9; }
       if (pos.y < floor + 0.06 && pos.y > floor - 1.5) {
         if (!impact) { impact = new T.Vector3(pos.x, floor, pos.z); impactN = fn ? fn.clone() : up.clone(); }
         endN = fn;

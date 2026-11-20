@@ -312,8 +312,11 @@ export function applyGunHooks(html) {
   // 22. a grenade's floor is found by a ray straight down, like everything else it meets. It was the walk code's
   //     groundHeight, which counts boxes for players only: on Alpine the caps that carry wall tops up to 12 m, so a frag
   //     thrown high near a wall settled on top of one, above the roofs. Rays never see player-only boxes.
+  //     The ray starts up to 60 cm above the grenade (so it steps up onto a kerb), but never above a ceiling: it looks up
+  //     first and starts just under whatever is there. Started above a ceiling it found the next floor's top, and a
+  //     grenade thrown in at a first-floor window, rising near the ceiling, was put on the floor above.
   swap(`let floor = -1e9; try { floor = G.physics.groundHeight(g.pos.x, g.pos.z, g.pos.y + .6); } catch { floor = -1e9; }`,
-    `let floor = -1e9; try { const dn = G.physics.raycast(_p.set(g.pos.x, g.pos.y + .6, g.pos.z), _b.set(0, -1, 0), 2.1); floor = dn ? dn.point.y : -1e9; } catch { floor = -1e9; }`, 'the floor under a grenade');
+    `let floor = -1e9; try { const ce = G.physics.raycast(_p.set(g.pos.x, g.pos.y, g.pos.z), _b.set(0, 1, 0), .6), lift = ce ? Math.max(0, ce.dist - .02) : .6; const dn = G.physics.raycast(_p.set(g.pos.x, g.pos.y + lift, g.pos.z), _b.set(0, -1, 0), lift + 1.5); floor = dn ? dn.point.y : -1e9; } catch { floor = -1e9; }`, 'the floor under a grenade');
 
   // 23. a cooked grenade can be put back: pressing aim (right mouse, the touch Aim button, a pad's left trigger) while
   //     cooking cancels the throw and the grenade is yours again. Aim held when the cook began counts only once let go.

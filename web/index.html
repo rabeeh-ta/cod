@@ -8124,7 +8124,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
             if (n.y > .5 && Math.abs(v.y) < 1.2) v.y = 0;
           }
         } else g.pos.addScaledVector(v, dt);
-        let floor = -1e9; try { const dn = G.physics.raycast(_p.set(g.pos.x, g.pos.y + .6, g.pos.z), _b.set(0, -1, 0), 2.1); floor = dn ? dn.point.y : -1e9; } catch { floor = -1e9; }
+        let floor = -1e9; try { const ce = G.physics.raycast(_p.set(g.pos.x, g.pos.y, g.pos.z), _b.set(0, 1, 0), .6), lift = ce ? Math.max(0, ce.dist - .02) : .6; const dn = G.physics.raycast(_p.set(g.pos.x, g.pos.y + lift, g.pos.z), _b.set(0, -1, 0), lift + 1.5); floor = dn ? dn.point.y : -1e9; } catch { floor = -1e9; }
         if (Number.isFinite(floor) && g.pos.y < floor + .06 && g.pos.y > floor - 1.5) { g.pos.y = floor + .06; if (v.y < 0) { v.y = -v.y * FRAG.bounce; v.x *= .72; v.z *= .72; if (v.y < 1.2) v.y = 0; } }
         if (g.pos.y < -6) { endFrag(g); continue; }
         g.spin += dt * (4 + v.length());
