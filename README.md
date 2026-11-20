@@ -14,7 +14,9 @@ Voice chat works in every online match. Press **V** (or the MIC button on touch)
 
 The pause screen shows the whole map in its top right corner: where you are and the way you face, your team in Team play, the two ammo sets, and an opponent for a few seconds after they fire (as the minimap does). It needs room beside the pause menu, so a screen under about 720 px wide does not get it.
 
-**Settings → Crouch** chooses how the crouch key works: **Hold** (down while held, the default) or **Toggle** (press once to go down, again to stand; jumping or starting a sprint also stands you up). The choice is kept in the browser.
+**Settings → Crouch** and **Settings → Peek** choose how those keys work: **Hold** (down, or leaning, while held; the default), **Toggle** (press once to go down or lean out, again to come back; jumping or starting a sprint also stands you up, and sprinting brings you upright) or **Mixed** (a tap toggles, a press held half a second or more works as hold). The choices are kept in the browser.
+
+Hold **F** to cook a grenade: red dots show where it would fly if let go now, up to the first thing it hits, a ring marks that spot and a small mark shows where it ends up after bouncing (both marks show through walls). Aim (right click) while cooking puts it back. In **Deathmatch** each player picks a colour (Quick play screen, room lobby, pause screen); a colour someone else in the room has is crossed out and says who has it, and whoever was in the room first keeps it.
 
 ## Run it
 
@@ -53,6 +55,7 @@ See [CLAUDE.md](CLAUDE.md) for the Cloudflare stack.
 |---|---|---|
 | Game | `web/index.html` | The game, served as a static asset |
 | Network adapter | `web/net.js` | Stands in for the claude.ai runtime the game was written for, plus the first screen and voice (WebRTC, peer to peer) |
+| Grenade path | `web/fragpath.js` | The path of a cooked grenade: the game's own throw flown through the game's own steps (fixed 1/120 s since gun hook 24), drawn as dots to the first hit, a ring there and a mark where it ends up |
 | Pause map | `web/fullmap.js` | The whole map on the pause screen, from the same walk grid as the minimap, north up, with you, your team, the ammo sets and recent shooters |
 | Map choice | `web/maps.js` | Decides which map this page load builds (a link, the room, or the player's last pick) before the game starts |
 | Colosseum | `web/maps/colosseum.js` | The second map: stonework, cover, light and collision, built in code when it is picked |

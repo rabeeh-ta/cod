@@ -10,12 +10,12 @@
      tts, db     -> not provided (typed radio, which tts read aloud, is gone; db was only for connection diagnostics)
    It also owns the front end around the matches: home, quick play, private match and the room lobby.
    Loaded as a plain <script> right before the multiplayer layer, so window.claude exists when that layer starts.
-   It brings in touch.js too: the layout editor for the touch buttons (Settings → Touch controls), and fullmap.js: the
-   whole map in the top right corner of the pause screen. */
+   It brings in touch.js too: the layout editor for the touch buttons (Settings → Touch controls), fullmap.js: the
+   whole map in the top right corner of the pause screen, and fragpath.js: the path of a cooked grenade. */
 (() => {
   'use strict';
 
-  for (const src of ['/touch.js', '/fullmap.js']) { const s = document.createElement('script'); s.src = src; s.async = true; document.head.appendChild(s); }
+  for (const src of ['/touch.js', '/fullmap.js', '/fragpath.js']) { const s = document.createElement('script'); s.src = src; s.async = true; document.head.appendChild(s); }
 
   const CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
   const MAX = 10;
@@ -54,6 +54,7 @@
     const peers = new Map();
     let me = { peer: peerId, by: uid, kind: 'viewer', presence: {}, sameTab: true };
     let ws = null, open = false, joined = false, dead = false, tries = 0, notifyT = 0, pingT = 0;
+    const before = new Set(); let helloSeen = false; // the players already in the room when this page first joined it: they came first
     const sent = {}; // key -> JSON of the value last sent, so only changed keys go on the wire
     const listeners = new Set();
 
@@ -109,8 +110,8 @@
         tries = 0;
         if (typeof m.now === 'number') skew = m.now - realNow(); // one-way delay (tens of ms) is close enough for round ends
         peers.clear();
-        for (const p of m.peers || []) peers.set(p.peer, peerOf(p.peer, p.by, p.p));
-        joined = true;
+        for (const p of m.peers || []) { peers.set(p.peer, peerOf(p.peer, p.by, p.p)); if (!helloSeen) before.add(p.peer); }
+        helloSeen = true; joined = true;
         if (Object.keys(me.presence).length) sendRaw({ t: 'p', full: true, d: me.presence }); // after a reconnect
         clearInterval(pingT); pingT = setInterval(() => { if (ws && ws.readyState === 1) ws.send('ping'); }, 20000);
         hooks.onHello([...peers.keys()]);
@@ -169,6 +170,7 @@
       setMap(map) { if (!joined) return false; sendRaw({ t: 'map', d: { map } }); return true; },
       mine: () => me.presence,
       get: peer => peers.get(peer),
+      earlier: peer => before.has(peer), // in the room before this page joined it (everyone agrees on who came first)
     };
   }
 
@@ -423,7 +425,7 @@
     resolveRoom(room);
   }
   const voiceMic = makeVoiceMic();
-  window.__net = { session, voice: () => voice.debug() }; // for the console: __net.voice()
+  window.__net = { session, voice: () => voice.debug(), room: () => room }; // for the console: __net.voice(); the room for the colour rows
   const user = { id: () => Promise.resolve(uid), profiles: () => Promise.resolve({}) };
 
   window.claude = {
@@ -860,6 +862,7 @@
     /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
        whoever goes looking. Add a new entry at the top with each release. */
     const UPDATES = [
+      ['20 Nov 2026', ['Grenades: while you hold F, red dots show where it will fly up to the first thing it hits, a ring marks that spot and a small mark shows where it ends up; the two marks show through walls. Aim (right click) while holding it puts the grenade back', 'Grenades bounce less, and fly the same at any frame rate', 'Alpine: a grenade thrown high no longer ends up on top of a roof', 'Deathmatch: choose your colour on the Quick play screen, in the room lobby and on the pause screen. A colour someone else has is crossed out and says who has it; whoever was in the room first keeps it', 'Settings → Peek: Hold, Mixed or Toggle. Crouch gets Mixed too: a tap toggles, a press held half a second works as hold', 'Team play: a player who leaves and comes back is one row on the board, and every round starts with nobody left over', 'Teammates\' footsteps are much quieter', 'The sniper scope comes up faster: 0.22 s, down from 0.34', 'Back works again on the team screen after leaving a match', 'Alpine: walk through the bushes; the fence on the west side of the green, the bush beside it and the back door of the ruin on the street are gone']],
       ['19 Nov 2026', ['A fourth map: Maram, a walled desert town under rocky hills in the morning sun, with two sites, a long road and tunnels', 'The whole map in the top right corner of the pause screen: where you are and the way you face, your team in Team deathmatch, the ammo sets, and anyone who has just fired', 'Settings → Crouch: hold the key, or press it once to go down and again to stand', 'The mouse wheel changes weapon while you sprint', 'Maram: smooth over slopes and stairs, the gun included', 'Typed radio (T) is gone; voice chat (V) stays']],
       ['18 Nov 2026', ['Vaulting: jump while running at a low wall, a barrier, a crate or a window sill and you go over it, through the window, or up onto it when it is higher than your chest. It keeps your speed, finds a window without lining up on it exactly, and puts your hands on the ledge; other players see you climb', 'Peeking (Q / E) now shows your soldier as far out as you can see: no more seeing round a corner while staying hidden', 'Reloading the page takes you straight back into the match you were in', 'Through the sniper scope Z steps the zoom (2x, 4x, 6x, 10x), so it works while you move', 'No fall damage from any drop under about 5 m: jump or vault out of an upstairs window', 'Alpine: two houses on the street can be entered, with a stair up to a room with a wide window; a stair to a veranda in the ruin by the well sign; a doorway into the stone ruin from the alley; the stone blocks and crates stand 1.35 to 1.95 m and are spread across the lanes; upstairs windows can be vaulted out of', 'A room\'s map can be changed from its lobby: everyone in the room moves to the new map together', 'Settings at the top of every menu screen', 'The pause screen of a room shows its code and a Copy link button of their own', 'Touch screens: move, resize and fade every button (Settings, Touch controls)', 'Phones held sideways: the first screen fits without scrolling']],
       ['17 Nov 2026', ['A new front end: Quick play, Private match and Solo mission, each with its own screen', 'Quick play: pick Team deathmatch or Deathmatch, a map and a gun, then Find match', 'Maps are picked from pictures of them seen from above', 'Rooms have a lobby: the code to share, the map, both modes, and who is on which team',
@@ -1341,8 +1344,9 @@
     setInterval(() => {
       voiceRow();
       const st = gameState(), onTitle = st === 'title';
-      // after a quick-play match the game drops back to its title: this screen is home
-      if ((session.kind === 'public' || session.kind === 'private') && onTitle && !joining && !inSettings) showGate();
+      // after a match the game drops back to its title: these screens come back, on the session's own (the team pick, the
+      // room lobby). Only while they are hidden: once they show, the player moves between them freely (Back to home works)
+      if ((session.kind === 'public' || session.kind === 'private') && onTitle && !joining && !inSettings && gate.hidden) showGate();
       if (fsBtn.hidden === fsWanted()) fsBtn.hidden = !fsWanted();
       if (screen === 'room' && !gate.hidden) paintRoom();
       if (screen === 'team' && !gate.hidden) paintTeam();
@@ -1451,21 +1455,37 @@
   })();
 })();
 
-/* Crouch: hold or toggle (Settings, Crouch). Some players hold the key to stay down; others press it once to go down and
-   once more to stand. The game itself only knows "held", so in toggle mode the input's crouch is replaced, every frame,
-   by a state that flips on each press of any crouch key or button (keyboard, controller, touch: whatever the game counts
-   as crouch). Pressing jump or starting a sprint stands the player up, as in other shooters, and going down clears it.
-   The game still keeps a crouched player down under a low ceiling. The choice is kept in this browser. */
+/* Crouch and peek: hold or toggle (Settings, Crouch and Peek). Some players hold the key; others press it once to go down
+   (or lean out) and once more to come back. The game itself only knows "held".
+   Crouch: in toggle mode the input's crouch is replaced, every frame, by a state that flips on each press of any crouch key
+   or button (keyboard, controller, touch: whatever the game counts as crouch). Pressing jump or starting a sprint stands
+   the player up, as in other shooters, and going down clears it. The game still keeps a crouched player down under a low
+   ceiling.
+   Peek: the game asks window.__SALTLINE_PEEK for the lean (gun hook 21). In toggle mode a press of lean left leans left and
+   another comes back; lean right the same; pressing the other side leans that way at once. Sprinting, going down or
+   leaving play brings the player upright.
+   Mixed (between the two, for both): a short press works as toggle, a press held for half a second or more works as hold, so
+   letting go of it comes back up. A press while toggled down (or out) comes back at once. The choices are kept in this
+   browser. */
 (() => {
   'use strict';
-  const KEY = 'saltline.crouch';
-  let mode = 'hold', down = false, was = { crouch: false, jump: false, sprint: false };
-  try { if (localStorage.getItem(KEY) === 'toggle') mode = 'toggle'; } catch { /* private mode: hold */ }
+  const KEY = 'saltline.crouch', PEEK_KEY = 'saltline.peek';
+  const MODES = ['hold', 'mixed', 'toggle'], LONG_MS = 500, pick = m => (MODES.includes(m) ? m : 'hold');
+  let mode = 'hold', peekMode = 'hold', down = false, lean = 0, was = { crouch: false, jump: false, sprint: false, leanL: false, leanR: false };
+  let crouchHold = 0, leanHold = null;            // mixed: when the press that went down (or out) began, while it is still held
+  try { mode = pick(localStorage.getItem(KEY)); peekMode = pick(localStorage.getItem(PEEK_KEY)); } catch { /* private mode: hold */ }
   function setMode(m) {
-    mode = m === 'toggle' ? 'toggle' : 'hold'; down = false;
+    mode = pick(m); down = false; crouchHold = 0;
     try { localStorage.setItem(KEY, mode); } catch { /* private mode */ }
     mark();
   }
+  function setPeek(m) {
+    peekMode = pick(m); lean = 0; leanHold = null;
+    try { localStorage.setItem(PEEK_KEY, peekMode); } catch { /* private mode */ }
+    mark();
+  }
+  // what the game's peek asks for: the toggled lean, or the two keys as they are held
+  window.__SALTLINE_PEEK = G => peekMode !== 'hold' ? lean : (G.input.down('interact') ? 1 : 0) - (G.input.down('leanL') ? 1 : 0);
   // the game's input: its per-frame update is wrapped once the game has made it
   function hook() {
     const G = window.__G, inp = G && G.input;
@@ -1473,35 +1493,196 @@
     const update = inp.update;
     inp.update = function () {
       const r = update.apply(this, arguments), P = G.player;
-      const held = { crouch: !!this.down('crouch'), jump: !!this.down('jump'), sprint: !!this.sprint };
-      if (mode === 'toggle') {
-        if (!P || !P.alive) down = false;
+      const held = { crouch: !!this.down('crouch'), jump: !!this.down('jump'), sprint: !!this.sprint, leanL: !!this.down('leanL'), leanR: !!this.down('interact') };
+      const now = performance.now();
+      if (mode !== 'hold') {
+        if (!P || !P.alive) { down = false; crouchHold = 0; }
         else {
-          if (held.crouch && !was.crouch) down = !down;
-          if (down && ((held.jump && !was.jump) || (held.sprint && !was.sprint))) down = false;
+          if (held.crouch && !was.crouch) {
+            if (mode === 'toggle') down = !down;
+            else if (down && !crouchHold) down = false;                  // mixed, toggled down: a press stands up
+            else { down = true; crouchHold = now; }
+          }
+          if (!held.crouch && was.crouch && crouchHold) { if (now - crouchHold >= LONG_MS) down = false; crouchHold = 0; }   // mixed: a long press was a hold
+          if (down && ((held.jump && !was.jump) || (held.sprint && !was.sprint))) { down = false; crouchHold = 0; }
         }
         this.crouch = down;
+      }
+      if (peekMode !== 'hold') {
+        if (!P || !P.alive || P.sprinting || held.sprint || !G.game || G.game.state !== 'playing') { lean = 0; leanHold = null; }
+        else for (const [side, k] of [[-1, 'leanL'], [1, 'leanR']]) {
+          if (held[k] && !was[k]) {
+            if (peekMode === 'toggle') lean = lean === side ? 0 : side;
+            else if (lean === side && !leanHold) lean = 0;                // mixed, toggled out: a press comes back
+            else { lean = side; leanHold = { side, at: now }; }
+          }
+          if (!held[k] && was[k] && leanHold && leanHold.side === side) { if (now - leanHold.at >= LONG_MS) lean = 0; leanHold = null; }
+        }
       }
       was = held;
       return r;
     };
     inp.__crouchMode = true;
   }
-  // Settings: a "Crouch" row of two, Hold and Toggle, under Invert Y, drawn like the game's own choices
+  // Settings: a "Crouch" and a "Peek" row of three, Hold, Mixed and Toggle, under Invert Y, drawn like the game's own choices
+  function seg(id, label, attr, after) {
+    let r = document.getElementById(id);
+    if (!r) {
+      r = document.createElement('div'); r.className = 'row'; r.id = id;
+      r.innerHTML = `<label id="l-${attr}">${label}</label><div class="seg" role="group" aria-labelledby="l-${attr}">` +
+        `<button type="button" data-${attr}="hold" aria-pressed="false">Hold</button><button type="button" data-${attr}="mixed" aria-pressed="false">Mixed</button><button type="button" data-${attr}="toggle" aria-pressed="false">Toggle</button></div>`;
+      r.addEventListener('click', ev => { const b = ev.target.closest(`button[data-${attr}]`); if (!b) return; ev.stopPropagation(); (attr === 'crouch' ? setMode : setPeek)(b.dataset[attr]); });
+      after.after(r);
+    }
+    return r;
+  }
   function row() {
     const inv = document.querySelector('.panel [data-act="invert"]'), r0 = inv && inv.closest('.row');
     if (!r0) return;
-    if (!document.getElementById('crouch-row')) {
-      const r = document.createElement('div'); r.className = 'row'; r.id = 'crouch-row';
-      r.innerHTML = '<label id="l-crouch">Crouch</label><div class="seg" role="group" aria-labelledby="l-crouch">' +
-        '<button type="button" data-crouch="hold" aria-pressed="false">Hold</button><button type="button" data-crouch="toggle" aria-pressed="false">Toggle</button></div>';
-      r.addEventListener('click', ev => { const b = ev.target.closest('button[data-crouch]'); if (!b) return; ev.stopPropagation(); setMode(b.dataset.crouch); });
-      r0.after(r);
-    }
+    const c = seg('crouch-row', 'Crouch', 'crouch', r0);
+    seg('peek-row', 'Peek', 'peek', c);
     mark();
   }
-  function mark() { for (const b of document.querySelectorAll('#crouch-row button[data-crouch]')) b.setAttribute('aria-pressed', String(b.dataset.crouch === mode)); }
+  function mark() {
+    for (const b of document.querySelectorAll('#crouch-row button[data-crouch]')) b.setAttribute('aria-pressed', String(b.dataset.crouch === mode));
+    for (const b of document.querySelectorAll('#peek-row button[data-peek]')) b.setAttribute('aria-pressed', String(b.dataset.peek === peekMode));
+  }
   const tick = () => { hook(); row(); };
   setInterval(tick, 500); tick();
   window.__saltlineCrouch = { get mode() { return mode; }, set: setMode };
+  window.__saltlinePeek = { get mode() { return peekMode; }, set: setPeek, get lean() { return lean; } };
+})();
+
+/* Deathmatch colours. In Deathmatch every player wears their own colour, and no two players in a room wear the same one.
+   A row of the ten colours sits under the gun on the Quick play screen and in the room lobby whenever Deathmatch is the
+   mode there, and on the pause card during a Deathmatch match. A colour another player in the room has is faded and
+   crossed out; hovering it (or focusing it) says who has it. If two players end up with the same colour (both picked it
+   at once, or someone joins wearing it), whoever was in the room first keeps it and the other is moved to the first free
+   one, with a line saying so. Who came first is the room's own join order, which every page agrees on. The colour itself
+   is the game's (window.__SALTLINE_COLOR, import patch 11), kept in this browser. Team deathmatch wears team colours, so
+   none of this shows there. */
+(() => {
+  'use strict';
+  const css = document.createElement('style');
+  css.textContent = `
+    .net-colors[hidden] { display: none; }
+    .net-sw { display: flex; flex-wrap: wrap; gap: 8px; }
+    .net-c { position: relative; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 0; background: var(--c); cursor: pointer;
+      box-shadow: inset 0 0 0 2px rgba(11,13,15,.55); transition: transform .1s ease, box-shadow .1s ease; -webkit-appearance: none; appearance: none; }
+    .net-c:hover { transform: scale(1.08); }
+    .net-c:active { transform: scale(.94); }
+    .net-c:focus-visible { outline: 2px solid var(--signal, #ffb347); outline-offset: 3px; }
+    .net-c[aria-checked="true"] { box-shadow: inset 0 0 0 2px var(--ink, #0b0d0f), 0 0 0 2px var(--bone, #e8e4da); }
+    /* taken: the colour dimmed under a dark veil and crossed out (a veil, not opacity, so its tooltip stays solid) */
+    .net-c[aria-disabled="true"] { cursor: not-allowed; transform: none;
+      background: linear-gradient(to top right, transparent calc(50% - 1.5px), rgba(11,13,15,.92) calc(50% - 1.5px), rgba(11,13,15,.92) calc(50% + 1.5px), transparent calc(50% + 1.5px)),
+        linear-gradient(rgba(11,13,15,.62), rgba(11,13,15,.62)), var(--c); }
+    .net-c::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 8px); z-index: 3; transform: translate(-50%, 4px);
+      padding: 6px 8px 5px; background: rgba(11,13,15,.94); border: 1px solid var(--line, rgba(232,228,218,.2)); color: var(--bone, #e8e4da);
+      font: 600 11px/1 var(--f-label, sans-serif); letter-spacing: .16em; text-transform: uppercase; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s ease, transform .12s ease; }
+    .net-c:nth-child(-n+2)::after { left: 0; transform: translate(0, 4px); }
+    .net-c:nth-last-child(-n+2)::after { left: auto; right: 0; transform: translate(0, 4px); }
+    .net-c:hover::after, .net-c:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
+    .net-c:nth-child(-n+2):hover::after, .net-c:nth-child(-n+2):focus-visible::after, .net-c:nth-last-child(-n+2):hover::after, .net-c:nth-last-child(-n+2):focus-visible::after { transform: translate(0, 0); }
+    .net-colors-note { min-height: 18px; margin: 9px 0 0; font: 400 15px/1.3 var(--f-label, sans-serif); color: var(--bone-dim, rgba(232,228,218,.64)); }
+    .net-colors.pause { margin: 18px 0 6px; }
+    .net-colors.pause .net-colors-k { margin: 0 0 10px; font: 600 11px/1 var(--f-label, sans-serif); letter-spacing: .24em; text-transform: uppercase; color: var(--steel, #8d9aa3); }
+    .net-colors.pause .net-c { width: 26px; height: 26px; }
+    .net-colors.pause .net-sw { gap: 7px; }
+    .net-colors.pause .net-colors-note { font-size: 13px; margin-top: 7px; }
+    @media (prefers-reduced-motion: reduce) { .net-c, .net-c::after { transition: none; } }`;
+  document.head.appendChild(css);
+
+  let room = null, note = '', noteUntil = 0;
+  setInterval(() => { const n = window.__net; room = n && n.room ? n.room() : null; }, 500);   // the page's room, once it has one
+  const C = () => window.__SALTLINE_COLOR || null;
+  const hex = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
+  const nameOf = p => { const n = p && p.presence && typeof p.presence.n === 'string' ? p.presence.n.trim() : ''; return n ? n.slice(0, 16) : 'Breacher ' + String(p.peer).slice(-3).toUpperCase(); };
+  const shade = c => { const col = C(); if (!col) return c; const i = col.palette.findIndex(x => x.toLowerCase() === c); return col.names[i] || c; };
+  // the colours the other players in this room wear, and whether each was here before this page joined
+  function taken() {
+    const t = new Map();
+    if (!room || !room.peers) return t;
+    for (const p of room.peers()) {
+      if (p.sameTab || !p.presence || !hex(p.presence.c)) continue;
+      const c = p.presence.c.toLowerCase(), first = room.earlier ? room.earlier(p.peer) : true, had = t.get(c);
+      if (!had) t.set(c, { name: nameOf(p), first }); else if (first && !had.first) t.set(c, { name: nameOf(p), first });
+    }
+    return t;
+  }
+  const modeOn = s => { const b = document.querySelector(`.fe-screen[data-s="${s}"] .fe-modes .fe-mode[aria-pressed="true"]`); return b ? b.dataset.mode : ''; };
+  function inDeathmatch() {
+    const M = window.__SALTLINE_MATCH, sess = window.__net && window.__net.session;
+    if (M && M.live) return M.mode === 'dm';
+    if (!sess) return false;
+    if (sess.kind === 'public') return sess.mode === 'dm';
+    if (sess.kind === 'private') return modeOn('room') === 'dm';
+    return false;
+  }
+  // a clash: whoever was in the room first keeps the colour, and this player takes the first free one
+  function settle() {
+    const col = C(); if (!col || !room || !inDeathmatch()) return;
+    const mine = String(col.get()).toLowerCase(), t = taken(), who = t.get(mine);
+    if (!who || !who.first) return;
+    const free = col.palette.map(c => c.toLowerCase()).find(c => !t.has(c));
+    if (!free) return;
+    col.set(free);
+    note = `${shade(mine)} is ${who.name}'s, so you are ${shade(free)}`; noteUntil = performance.now() + 7000;
+    try { const M = window.__SALTLINE_MATCH, G = window.__G; if (M && M.live && G && G.hud && G.hud.message) G.hud.message(note, 4); } catch { /* the row says it too */ }
+  }
+  function box(host, kind, before) {
+    let b = host.querySelector(':scope > .net-colors');
+    if (!b) {
+      b = document.createElement('div'); b.className = 'net-colors ' + kind;
+      b.innerHTML = `<div class="${kind === 'pause' ? 'net-colors-k' : 'fe-k'}">Your colour</div><div class="net-sw" role="radiogroup" aria-label="Your colour"></div><p class="net-colors-note" role="status"></p>`;
+      if (before) host.insertBefore(b, before); else host.appendChild(b);
+    }
+    return b;
+  }
+  function paint(b, hint) {
+    const col = C(); if (!col) { b.hidden = true; return; }
+    const sw = b.querySelector('.net-sw'), mine = String(col.get()).toLowerCase(), t = taken();
+    if (!sw.firstChild) col.palette.forEach(c => {
+      const x = document.createElement('button'); x.type = 'button'; x.className = 'net-c'; x.dataset.c = c.toLowerCase(); x.style.setProperty('--c', c); x.setAttribute('role', 'radio');
+      x.addEventListener('click', ev => { ev.stopPropagation(); ev.preventDefault(); if (x.getAttribute('aria-disabled') === 'true') return; col.set(x.dataset.c); note = ''; tick(); });
+      sw.appendChild(x);
+    });
+    for (const x of sw.children) {
+      const c = x.dataset.c, who = t.get(c), me = c === mine, off = !!who && !me;
+      x.setAttribute('aria-checked', String(me)); x.setAttribute('aria-disabled', String(off)); x.tabIndex = me ? 0 : -1;
+      x.dataset.tip = off ? 'Taken by ' + who.name : me ? shade(c) + ' · yours' : shade(c);
+      x.setAttribute('aria-label', shade(c) + (off ? ', taken by ' + who.name : me ? ', your colour' : ''));
+    }
+    const n = b.querySelector('.net-colors-note'), text = performance.now() < noteUntil ? note : hint;
+    if (n.textContent !== text) n.textContent = text;
+  }
+  // arrow keys move along the row, as in any group of choices
+  document.addEventListener('keydown', ev => {
+    const x = ev.target && ev.target.closest ? ev.target.closest('.net-c') : null; if (!x) return;
+    const k = ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? 1 : ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' ? -1 : 0; if (!k) return;
+    ev.preventDefault(); ev.stopPropagation();
+    const all = [...x.parentElement.children]; let i = all.indexOf(x);
+    for (let s = 0; s < all.length; s++) { i = (i + k + all.length) % all.length; if (all[i].getAttribute('aria-disabled') !== 'true') break; }
+    all[i].tabIndex = 0; all[i].focus(); all[i].click();
+  }, true);
+  function tick() {
+    if (!C()) return;
+    settle();
+    for (const s of ['quick', 'room']) {
+      const scr = document.querySelector(`.fe-screen[data-s="${s}"]`), host = scr && scr.querySelector('.fe-col:last-child');
+      if (!host) continue;
+      const show = !scr.hidden && modeOn(s) === 'dm';
+      let b = host.querySelector(':scope > .net-colors');
+      if (show) { b = box(host, 'lobby'); paint(b, s === 'quick' && !room ? 'If someone in the match already wears it, you get a free colour.' : ''); }
+      if (b) b.hidden = !show;
+    }
+    const card = document.querySelector('#ui [data-s="paused"]'), M = window.__SALTLINE_MATCH;
+    if (card) {
+      const show = !!(M && M.live && M.mode === 'dm');
+      let b = card.querySelector(':scope > .net-colors');
+      if (show) { b = box(card, 'pause', card.querySelector('.m-actions')); paint(b, ''); }
+      if (b) b.hidden = !show;
+    }
+  }
+  setInterval(tick, 300);
 })();

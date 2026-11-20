@@ -49,7 +49,7 @@
        open     the ground floor can be entered; damage only out of reach
      upstairs: a stair against the west wall (keep it blind: noWin) up to a room on the first floor whose windows
      can be climbed out of; bigWin: one side whose first-floor windows are a single opening instead, as high as the others and 5 m wide;
-     extraDoors: [[side, along]] a doorway more; veranda: a ruin's side ('n', 's': stair against the west wall; 'e': stair
+     extraDoors: [[side, along]] a doorway more; noDoor: [side] the middle doorway of that side walled up; veranda: a ruin's side ('n', 's': stair against the west wall; 'e': stair
      against the back wall) with boards along it at the first floor, and nothing else up there
        ruin     broken walls, open to the sky or nearly; damage anywhere
      and what the war did to it (see house()): damage.blasts [x, y, z, radius], damage.collapse (a corner or a stretch
@@ -59,7 +59,7 @@
   const HOUSES = [
     // north of the street
     { id: 'n1', at: [-33, 4, -22, 13], floors: 3, ridge: 'x', kind: 'open', upstairs: true, noWin: ['w0', 'w1'], bigWin: 'n', tint: [1.12, 0.98, 0.74], quoins: true, roof: 'holed', roofHoles: [[-25.8, 6.6, 1.7]], damage: { blasts: [[-25.6, 7.4, 4, 1.25]] } },
-    { id: 'n2', at: [-19, 4, -8, 13], floors: 2, ridge: 'x', kind: 'ruin', veranda: 'e', tint: [1.06, 1.0, 0.9], seed: 11, roof: 'none', damage: { collapse: { x: -13, z: 4, depth: 7.4, sigma: 3.0 }, rag: 0.8, blasts: [[-17.2, 1.6, 13.2, 1.5]], burnt: 0.45 } },
+    { id: 'n2', at: [-19, 4, -8, 13], floors: 2, ridge: 'x', kind: 'ruin', veranda: 'e', noDoor: ['s'], tint: [1.06, 1.0, 0.9], seed: 11, roof: 'none', damage: { collapse: { x: -13, z: 4, depth: 7.4, sigma: 3.0 }, rag: 0.8, blasts: [[-17.2, 1.6, 13.2, 1.5]], burnt: 0.45 } },
     { id: 'n3', at: [-5, 4, 7, 13], floors: 2, ridge: 'x', kind: 'open', tint: [1.14, 0.92, 0.82], balcony: 's', quoins: true, roof: 'holed', roofHoles: [[5.2, 10.6, 1.5]], upstairs: true, noWin: ['w0', 'w1'] },
     { id: 'n4', at: [10, 4, 21, 13], floors: 2, ridge: 'x', kind: 'ruin', tint: [0.96, 0.95, 0.93], seed: 23, stone: true, extraDoors: [['w', 8.5]], roof: 'skeleton', floor: true, damage: { top: 6.6, rag: 0.7, blasts: [[14.2, 1.2, 4, 1.55], [21, 4.6, 7.6, 1.6]], burnt: 0.9 } },
     // south of the street
@@ -124,7 +124,7 @@
   const groundKind = (x, z) => (cobbleAt(x, z) > 0.5 ? 'cobble' : turfAt(x, z) > 0.5 ? 'turf' : 'dirt');
   const VERANDAS = [];   // [x0, z0, x1, z1] of each veranda, filled as the houses are built
   /* Bushes: [x, z, radius]. Leaves to look at, and nothing more: players walk through them and shots pass. */
-  const BUSHES = [[-9.2, -7.5, 0.9], [8.2, -7, 0.8], [-9, -22, 1.0], [7.5, -17, 0.9], [-34.6, 20.5, 1.0], [-26.5, 14.6, 0.8], [-34.8, -15, 0.9], [-12.4, -24.6, 0.9], [2, -24.8, 0.8], [26.8, 3.4, 0.7], [-22.4, 12.4, 0.7], [20.2, -3.6, 0.6], [8.6, 12.5, 0.6]];
+  const BUSHES = [[8.2, -7, 0.8], [-9, -22, 1.0], [7.5, -17, 0.9], [-34.6, 20.5, 1.0], [-26.5, 14.6, 0.8], [-34.8, -15, 0.9], [-12.4, -24.6, 0.9], [2, -24.8, 0.8], [26.8, 3.4, 0.7], [-22.4, 12.4, 0.7], [20.2, -3.6, 0.6], [8.6, 12.5, 0.6]];
 
   /* ------------------------------------------------------------------ before the game reads its constants */
   function pre(G) {
@@ -549,7 +549,8 @@
           const cu = Math.round((a + (i + 0.5) * step) / CELL) * CELL;
           if (spec.id === 'tower') { if (i === Math.floor(bays / 2)) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: H - 4.4, v1: H - 1.6, kind: 'belfry', arch: true }); continue; }
           if (spec.church) { if (i === doorBay) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: 0, v1: 3.0, kind: 'door', arch: true, church: true }); else if (long) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: 3.4, v1: 6.2, kind: 'win', arch: true, church: true }); continue; }
-          if (!(spec.noWin && spec.noWin.includes(side + i))) holes.push(i === doorBay ? { u0: cu - 0.5, u1: cu + 0.5, v0: 0, v1: 2.1, kind: 'door' } : { u0: cu - 0.5, u1: cu + 0.5, v0: 1.0, v1: 2.2, kind: 'win' });
+          if (i === doorBay && spec.noDoor && spec.noDoor.includes(side)) { /* this doorway is walled up: the bay stays plain wall */ }
+          else if (!(spec.noWin && spec.noWin.includes(side + i))) holes.push(i === doorBay ? { u0: cu - 0.5, u1: cu + 0.5, v0: 0, v1: 2.1, kind: 'door' } : { u0: cu - 0.5, u1: cu + 0.5, v0: 1.0, v1: 2.2, kind: 'win' });
           for (let f = 1; f < floors; f++) if (!(f === 1 && spec.bigWin === side)) holes.push({ u0: cu - 0.5, u1: cu + 0.5, v0: levels[f] + 0.9, v1: levels[f] + 2.1, kind: 'win', up: true });
         }
         // a first floor that looks out through one wide opening; a doorway more
@@ -712,7 +713,8 @@
         for (let p = u + 0.14; p < u1 - 0.05; p += 0.2) { const h = 0.95 + 0.12 * hash(p * 50, at * 31); alongX ? solid('wood', p, 0.05, at + 0.03, p + 0.1, h, at + 0.055, { tint: [0.6, 0.56, 0.5], only: 'shots' }) : solid('wood', at + 0.03, 0.05, p, at + 0.055, h, p + 0.1, { tint: [0.6, 0.56, 0.5], only: 'shots' }); }
       }
     }
-    fence(-10, -5, 9, -5, 0); fence(-10, -5, -10, -14); fence(9, -5, 9, -12);              // round the green, open to the street in the middle
+    fence(-10, -5, 9, -5, 0); fence(9, -5, 9, -12);              // round the green, open to the street in the middle; its west side and the bush
+    // beside it were taken out (Irfan, 20 Nov 2026): they stood in front of the house door there
     fence(-36, 13.6, -24.5, 13.6, -30);                                                    // the west garden
     // the well on the green: a square kerb of stone with a timber frame over it
     { const x = -1, z = -14; for (const [a, b, c, d] of [[x - 1, z - 1, x + 1, z - 0.7], [x - 1, z + 0.7, x + 1, z + 1], [x - 1, z - 0.7, x - 0.7, z + 0.7], [x + 0.7, z - 0.7, x + 1, z + 0.7]]) solid('stone', a, 0, b, c, 0.9, d, {});

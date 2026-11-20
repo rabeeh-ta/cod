@@ -121,6 +121,7 @@ export function applyGunHooks(html) {
   //     when peeking) while the figure's head only leans about 30 cm, so a shot at the visible head went through
   swap(`        const th = raySphere(o, d, x + lx, y + 1.63 - drop, z + lz, .17, lim);`,
     `        let hx = x + lx, hy = y + 1.63 - drop, hz = z + lz; try { const hb = R.av && R.av.J && R.av.J.head, hv = G.__headAt || (G.__headAt = new T.Vector3()); if (hb) { hb.bone.getWorldPosition(hv); hx = hv.x; hy = hv.y + .09; hz = hv.z; } } catch { /* the estimate above */ }\n        const th = raySphere(o, d, hx, hy, hz, .18, lim);`, 'where a head can be hit');
+  swap(`gravity: 20, bounce: .42 };`, `gravity: 20, bounce: .28 };`, 'how much a grenade bounces');      // keeps 28% of its speed into a wall or floor, down from 42%: it stops nearer where it lands (Irfan, 20 Nov 2026)
   swap(`const FRAG = { count: 4, regen: 120000,`, `const FRAG = { count: 4, regen: 30000,`, 'how long a grenade takes to come back');      // 30 seconds each, down from two minutes
   swap(`P.invulnerable = true; if (first) refillFrags();`, `P.invulnerable = true; refillFrags();`, 'grenades on a respawn');      // every life starts with its grenades, not only the first
   swap(`const av = kit.create(); avatars.add(av.group);`, `const av = kit.create(); avatars.add(av.group); try { ${GUNS}.avatar(av); } catch (e) { console.error('[guns] avatar: ' + e); }`, 'a new avatar');
@@ -128,7 +129,9 @@ export function applyGunHooks(html) {
   // 14. a team's score is the sum of the rows under it, always. The game kept the kills of players who left (or reloaded,
   //     which makes a new connection) in the team score but dropped them from the board, so the numbers stopped adding up.
   //     Now each kept score remembers who it was (player id, name, deaths): it is added to that player's row when they are
-  //     back on the same team, and otherwise shown as its own row, "(left)". The team scores are then counted from the rows.
+  //     back (matched by player id, or by name when the id is new: another device; on either side, so one person is
+  //     always one row), and otherwise shown as its own row, "(left)". The team scores are then counted from the rows.
+  //     Every kept score goes at the end of the round (roundOver empties the bank), so a new round starts with no one.
   swap(`if (mp.mode === 'tdm' && R.tm >= 0 && R.k > 0) bankPut(R.peer, R.tm, R.k);`,
     `if (mp.mode === 'tdm' && R.tm >= 0 && R.k > 0) bankPut(R.peer, R.tm, R.k, R.id, R.name, R.d);`, 'a leaving player is kept');
   swap(`    function bankPut(peer, tm, k) {
@@ -155,11 +158,15 @@ export function applyGunHooks(html) {
     }`, 'the team scores');
   swap(`      for (const R of remotes.values()) rows.push({ me: false, peer: R.peer, name: R.name || 'Someone', k: R.k, d: R.d, tm: R.tm, alive: R.alive && !R.away, css: R.own || R.css || '#e8e4da' });
       return rows;`, `      for (const R of remotes.values()) rows.push({ me: false, peer: R.peer, id: R.id, name: R.name || 'Someone', k: R.k, d: R.d, tm: R.tm, alive: R.alive && !R.away, css: R.own || R.css || '#e8e4da' });
+      // one row per person: a kept score joins the row of whoever has the same player id or, failing that, the same name
+      // (another device, cleared storage), on either side; two departures of one person make one "(left)" row
       if (mp.mode === 'tdm') for (const peer in mp.bank) {
         const [tm, k, id, name, d] = mp.bank[peer];
         if (tm !== 0 && tm !== 1) continue;
-        const same = id && rows.find(r => r.tm === tm && (r.me ? id === net.myId : r.id === id));
-        if (same) { same.k += k; same.d += d || 0; same.bk = (same.bk || 0) + k; same.bd = (same.bd || 0) + (d || 0); }
+        const key = n => String(n || '').replace(/ \\(left\\)$/, '').trim().toLowerCase(), nm = key(name), named = nm && nm !== 'someone';
+        const same = rows.find(r => !r.left && id && (r.me ? id === net.myId : r.id === id)) || (named && rows.find(r => !r.left && key(r.name) === nm))
+          || rows.find(r => r.left && ((id && r.id === id) || (named && key(r.name) === nm)));
+        if (same) { same.k += k; same.d += d || 0; if (!same.left) { same.bk = (same.bk || 0) + k; same.bd = (same.bd || 0) + (d || 0); } }
         else rows.push({ me: false, left: true, peer, id, name: (name || 'Someone') + ' (left)', k, d: d || 0, tm, alive: false, css: '#e8e4da' });
       }
       return rows;`, 'kept players on the board');
@@ -296,6 +303,35 @@ export function applyGunHooks(html) {
   //     the run. With Shift down either direction counts; without it a sideways swipe still does nothing.
   hook(rx('Math\\.abs\\((§)\\.deltaY\\)<1\\|\\|\\((§)=(§),(§)\\.add\\("swap"\\)\\)'),
     (m, ev) => m.replace(`Math.abs(${ev}.deltaY)<1`, `(${ev}.shiftKey?Math.max(Math.abs(${ev}.deltaY),Math.abs(${ev}.deltaX)):Math.abs(${ev}.deltaY))<1`), 'the wheel that swaps weapons');
+
+  // 21. peeking can be held or toggled (Settings > Peek, in web/net.js, beside Crouch). The game asked the two keys
+  //     directly; it now asks window.__SALTLINE_PEEK for the lean (-1 left, 0, 1 right) when that is there
+  swap(`want = (G.input.down('interact') ? 1 : 0) - (G.input.down('leanL') ? 1 : 0);`,
+    `want = window.__SALTLINE_PEEK ? window.__SALTLINE_PEEK(G) : (G.input.down('interact') ? 1 : 0) - (G.input.down('leanL') ? 1 : 0);`, 'the keys that lean');
+
+  // 22. a grenade's floor is found by a ray straight down, like everything else it meets. It was the walk code's
+  //     groundHeight, which counts boxes for players only: on Alpine the caps that carry wall tops up to 12 m, so a frag
+  //     thrown high near a wall settled on top of one, above the roofs. Rays never see player-only boxes.
+  swap(`let floor = -1e9; try { floor = G.physics.groundHeight(g.pos.x, g.pos.z, g.pos.y + .6); } catch { floor = -1e9; }`,
+    `let floor = -1e9; try { const dn = G.physics.raycast(_p.set(g.pos.x, g.pos.y + .6, g.pos.z), _b.set(0, -1, 0), 2.1); floor = dn ? dn.point.y : -1e9; } catch { floor = -1e9; }`, 'the floor under a grenade');
+
+  // 23. a cooked grenade can be put back: pressing aim (right mouse, the touch Aim button, a pad's left trigger) while
+  //     cooking cancels the throw and the grenade is yours again. Aim held when the cook began counts only once let go.
+  //     Then, while a grenade is cooked, the path it would take is drawn (web/fragpath.js, loaded by web/net.js): the
+  //     same throw releaseFrag makes, flown through the same steps as the grenades above
+  swap(`    function stepFrags(dt) {\n      if (frag.cd > 0) frag.cd -= dt;`,
+    `    function stepFrags(dt) {
+      if (frag.cook) { const aim = !!G.input.ads; if (frag.cook.aimWas === undefined) frag.cook.aimWas = aim; else if (aim && !frag.cook.aimWas) { frag.cook = null; frag.left = Math.min(FRAG.count, frag.left + 1); if (frag.left >= FRAG.count) frag.next = 0; frag.rearm = .25; cookEl.classList.remove('on'); fragHud(); try { G.audio.play('pistol_slide', { gain: .6, pitch: 1.2 }); } catch { /* fine */ } } else frag.cook.aimWas = aim; }
+      try { if (window.__SALTLINE_FRAGPATH) window.__SALTLINE_FRAGPATH.step(G, P, FRAG, frag.cook && game.state === 'playing' && P.alive && (!mp.live || mp.alive) ? frag.cook : null); } catch (e) { console.error('[fragpath] ' + e); }\n      if (frag.cd > 0) frag.cd -= dt;`, 'the path of a cooked grenade, and putting it back');
+  swap(`cookEl.append(el('b', '', 'Let go to throw'), cookBar);`, `cookEl.append(el('b', '', 'Let go to throw · aim to cancel'), cookBar);`, 'the cook hint says how to cancel');
+
+  // 24. grenades fly in fixed steps of 1/120 s, whatever the frame rate. They moved by each frame's own time, so the same
+  //     throw landed in a different place at 30 and at 144 frames a second, and no drawn path could be right. Now the
+  //     path web/fragpath.js draws (the same steps) is the path flown, and every player's game flies a grenade alike.
+  swap(`      for (let i = frag.live.length - 1; i >= 0; i--) {\n        const g = frag.live[i], v = g.vel;\n        v.y -= FRAG.gravity * dt;`,
+    `      frag.acc = Math.min(.25, (frag.acc || 0) + dt);\n      for (; frag.acc >= 1 / 120; frag.acc -= 1 / 120) { const dt = 1 / 120;\n      for (let i = frag.live.length - 1; i >= 0; i--) {\n        const g = frag.live[i], v = g.vel;\n        v.y -= FRAG.gravity * dt;`, 'grenades in fixed steps');
+  swap(`        g.t -= dt;\n        if (g.t <= 0) burst(g);\n      }\n    }\n    function refillFrags()`,
+    `        g.t -= dt;\n        if (g.t <= 0) burst(g);\n      }\n      }\n    }\n    function refillFrags()`, 'grenades in fixed steps, the end');
 
   return html;
 }

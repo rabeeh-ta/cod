@@ -6,13 +6,14 @@
 //   2. empty the author's note (the menu code needs the element; with no v8 build the game keeps it hidden)
 //   3. swap the lobby's team-server label for the room, and reword the offline note (it pointed at claude.ai)
 //   4. load /net.js (the Cloudflare adapter) right before the multiplayer layer
-//   5. louder enemy footsteps: more gain point blank, a gentler fade with distance (hearing ranges unchanged), quieter teammates
+//   5. louder enemy footsteps: more gain point blank, a gentler fade with distance (hearing ranges unchanged), teammates much quieter (5%)
 //   6. a new round restarts every player: new spawn point, full health and ammo (it used to reset only the kill counts)
 //   7. the HUD's knife label no longer hides the key-name helper: the clash threw on every frame with keyboard and mouse,
 //      so the grenade markers and the minimap after it never drew
 //   8. the hooks that let a second map take over (scripts/map-hooks.mjs)
 //   9. the hooks that let more guns in (scripts/gun-hooks.mjs)
 //  10. no typed radio (the T key and everything it drew, sent and read aloud); voice chat stays
+//  11. window.__SALTLINE_COLOR: the player's colour, settable from web/net.js
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,7 +42,7 @@ once(/nohost: '[^']*'/, "nohost: 'You are not in a room. Pick Multiplayer to joi
 once('<script>\n/* Saltline multiplayer layer.', '<script src="/net.js"></script>\n<script>\n/* Saltline multiplayer layer.', 'the multiplayer layer');
 
 once("const STEP = { run: 26, walk: 18, crouch: 6, gRun: 2.5, gWalk: 2, gCrouch: .8 };", "const STEP = { run: 26, walk: 18, crouch: 6, gRun: 4.5, gWalk: 3.6, gCrouch: 1.3 };", 'the footstep levels');
-once("* Math.pow(near, 1.5) * (mate ? .4 : 1);", "* Math.pow(near, 1.1) * (mate ? .25 : 1);", 'the footstep distance fade');
+once("* Math.pow(near, 1.5) * (mate ? .4 : 1);", "* Math.pow(near, 1.1) * (mate ? .05 : 1);", 'the footstep distance fade');      // a teammate's steps at a twentieth of an enemy's, so the steps you hear are the ones that matter
 once("hint: 'Kills reset · new round is live'", "hint: 'New round · everyone starts fresh'", 'the round-over hint');
 once("      refillFrags();\n      try { hud.warn(title, 4); } catch { /* fine */ }", "      refillFrags();\n      respawn(false); // a new round is a clean start for everyone: new spawn point, full health, full ammo, down or not\n      try { hud.warn(title, 4); } catch { /* fine */ }", 'the round-over restart');
 once("const kn = knife.on ? 'Rifle' : 'Knife'; if (knifeName.textContent !== kn) knifeName.textContent = kn;",
@@ -58,6 +59,10 @@ once(/    const chatEl = el\('div', 'mp-chat'\);[\s\S]*?ev\.code === kb\.type [^
   "    keyWatch.push(() => { micKey.textContent = kn('mic'); try { micHud(); } catch { /* not built yet */ } });\n    function closeChat() { /* typed radio is gone; leaving a match still calls this */ }\n", 'the typed radio line and its key');
 once('\n      if (Array.isArray(pr.v)) for (const v of pr.v) if (Array.isArray(v) && +v[0] > (R.vSeq || 0)) { R.vSeq = +v[0]; heard(R, v[1]); }', '', 'typed radio lines heard');
 once(' v: radio.sent.slice(),', '', 'typed radio lines sent');
+// 11. a player's colour can be set from outside the game (web/net.js: the colour rows of Deathmatch), the way the game's
+//     own lobby swatches set it: kept in this browser and sent with the next presence
+once("const myColor = () => my.color || PALETTE[hash(net.myId || net.myPeer || 'me') % PALETTE.length];",
+  "const myColor = () => my.color || PALETTE[hash(net.myId || net.myPeer || 'me') % PALETTE.length];\n    window.__SALTLINE_COLOR = { palette: PALETTE, names: SHADES, get: () => myColor(), set(c) { if (!isHex(c)) return false; my.color = c.toLowerCase(); try { localStorage.setItem('saltline.mp.color', my.color); } catch { /* this visit only */ } lobbySig = ''; try { lobbyPresence(); renderLobby(); } catch { /* not built yet */ } mp.dirty = true; return true; } };", 'the colour, settable from outside');
 html = applyMapHooks(html);
 html = applyGunHooks(html);
 html = applyPerfHooks(html);

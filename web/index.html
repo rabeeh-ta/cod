@@ -6872,6 +6872,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     try { my.name = cleanName(localStorage.getItem('saltline.mp.name') || ''); } catch { /* fine */ }
     try { const c = localStorage.getItem('saltline.mp.color'); if (isHex(c)) my.color = c.toLowerCase(); } catch { /* no storage: the pick lasts for this visit */ }
     const myColor = () => my.color || PALETTE[hash(net.myId || net.myPeer || 'me') % PALETTE.length];
+    window.__SALTLINE_COLOR = { palette: PALETTE, names: SHADES, get: () => myColor(), set(c) { if (!isHex(c)) return false; my.color = c.toLowerCase(); try { localStorage.setItem('saltline.mp.color', my.color); } catch { /* this visit only */ } lobbySig = ''; try { lobbyPresence(); renderLobby(); } catch { /* not built yet */ } mp.dirty = true; return true; } };
     const hexOf = css => parseInt(String(css).slice(1), 16) || 0xe8e4da;
     let resolving = false;
     function resolve(ids) {
@@ -7745,7 +7746,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
             const run = R.speed > 4.6, range = R.crouch ? STEP.crouch : run ? STEP.run : STEP.walk, dist = Math.sqrt(P.pos.distanceToSquared(R.pos));
             if (!R.air && dist < range) {
               const near = 1 - dist / range, mate = mp.mode === 'tdm' && R.tm === mp.team;
-              const gain = (R.crouch ? STEP.gCrouch : run ? STEP.gRun : STEP.gWalk) * Math.pow(near, 1.1) * (mate ? .25 : 1);
+              const gain = (R.crouch ? STEP.gCrouch : run ? STEP.gRun : STEP.gWalk) * Math.pow(near, 1.1) * (mate ? .05 : 1);
               if (gain > .02) try { G.audio.play('step_concrete', { pos: { x: R.pos.x, y: R.pos.y + .1, z: R.pos.z }, world: true, ref: 1, roll: 0, gain, pitch: run ? 1.04 : .96, jitter: .07 }); } catch { /* fine */ }
             }
           }
@@ -7847,11 +7848,15 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     function liveRows() {
       const s = S(), rows = [{ me: true, name: my.name || shortName(net.myId, net.myPeer), k: s.kills, d: s.deaths, tm: mp.team, alive: mp.alive, css: myColor() }];
       for (const R of remotes.values()) rows.push({ me: false, peer: R.peer, id: R.id, name: R.name || 'Someone', k: R.k, d: R.d, tm: R.tm, alive: R.alive && !R.away, css: R.own || R.css || '#e8e4da' });
+      // one row per person: a kept score joins the row of whoever has the same player id or, failing that, the same name
+      // (another device, cleared storage), on either side; two departures of one person make one "(left)" row
       if (mp.mode === 'tdm') for (const peer in mp.bank) {
         const [tm, k, id, name, d] = mp.bank[peer];
         if (tm !== 0 && tm !== 1) continue;
-        const same = id && rows.find(r => r.tm === tm && (r.me ? id === net.myId : r.id === id));
-        if (same) { same.k += k; same.d += d || 0; same.bk = (same.bk || 0) + k; same.bd = (same.bd || 0) + (d || 0); }
+        const key = n => String(n || '').replace(/ \(left\)$/, '').trim().toLowerCase(), nm = key(name), named = nm && nm !== 'someone';
+        const same = rows.find(r => !r.left && id && (r.me ? id === net.myId : r.id === id)) || (named && rows.find(r => !r.left && key(r.name) === nm))
+          || rows.find(r => r.left && ((id && r.id === id) || (named && key(r.name) === nm)));
+        if (same) { same.k += k; same.d += d || 0; if (!same.left) { same.bk = (same.bk || 0) + k; same.bd = (same.bd || 0) + (d || 0); } }
         else rows.push({ me: false, left: true, peer, id, name: (name || 'Someone') + ' (left)', k, d: d || 0, tm, alive: false, css: '#e8e4da' });
       }
       return rows;
@@ -7992,14 +7997,14 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       if (showBoard !== board.classList.contains('on')) { if (showBoard) renderBoard(); board.classList.toggle('on', showBoard); }
     }
     /* ------------------------------------------------------------------ frag grenades: four to start, one comes back every two minutes. Hold F to pull the pin and cook, let go to throw */
-    const FRAG = { count: 4, regen: 30000, fuse: 3.6, radius: 7.5, damage: 150, speed: 19, lift: 5, cooldown: .7, gravity: 20, bounce: .42 };
+    const FRAG = { count: 4, regen: 30000, fuse: 3.6, radius: 7.5, damage: 150, speed: 19, lift: 5, cooldown: .7, gravity: 20, bounce: .28 };
     const frag = { left: FRAG.count, next: 0, cd: 0, live: [], seq: 0, sent: [], pool: [], cook: null, rearm: 0 };
     const fragEl = el('div', 'mp-frag'); const fragKey = el('kbd', '', 'F'); const fragPips = el('span'); const fragTime = el('em');
     fragEl.append(fragKey, el('b', '', 'Frag'), fragPips, fragTime); keyWatch.push(() => { fragKey.textContent = kn('frag'); });
     const fragBtn = el('button', 'mp-fragbtn', 'FRAG'); fragBtn.type = 'button'; fragBtn.setAttribute('aria-label', 'Frag grenade: hold to cook, let go to throw');
     fragBtn.addEventListener('pointerdown', ev => { ev.preventDefault(); try { fragBtn.setPointerCapture(ev.pointerId); } catch { /* fine */ } startCook(); });
     for (const t of ['pointerup', 'pointercancel']) fragBtn.addEventListener(t, ev => { ev.preventDefault(); releaseFrag(); });
-    const cookEl = el('div', 'mp-cook'); const cookBar = el('i'); cookEl.append(el('b', '', 'Let go to throw'), cookBar);
+    const cookEl = el('div', 'mp-cook'); const cookBar = el('i'); cookEl.append(el('b', '', 'Let go to throw · aim to cancel'), cookBar);
     const nadeBox = el('div', 'mp-nades'); const nadeEls = [];
     for (let i = 0; i < 4; i++) { const n = el('div', 'mp-nade'); n.append(el('i'), el('b', '', 'Frag')); nadeBox.appendChild(n); nadeEls.push({ el: n, on: false, x: 1e9, y: 1e9 }); }
     const mapEl = el('div', 'mp-map'); const mapCv = document.createElement('canvas'); mapEl.appendChild(mapCv);
@@ -8084,6 +8089,8 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       if (dist < FRAG.radius && (dist < 1 || open(me))) P.damage(fall(dist), src);
     }
     function stepFrags(dt) {
+      if (frag.cook) { const aim = !!G.input.ads; if (frag.cook.aimWas === undefined) frag.cook.aimWas = aim; else if (aim && !frag.cook.aimWas) { frag.cook = null; frag.left = Math.min(FRAG.count, frag.left + 1); if (frag.left >= FRAG.count) frag.next = 0; frag.rearm = .25; cookEl.classList.remove('on'); fragHud(); try { G.audio.play('pistol_slide', { gain: .6, pitch: 1.2 }); } catch { /* fine */ } } else frag.cook.aimWas = aim; }
+      try { if (window.__SALTLINE_FRAGPATH) window.__SALTLINE_FRAGPATH.step(G, P, FRAG, frag.cook && game.state === 'playing' && P.alive && (!mp.live || mp.alive) ? frag.cook : null); } catch (e) { console.error('[fragpath] ' + e); }
       if (frag.cd > 0) frag.cd -= dt;
       if (frag.rearm > 0) { frag.rearm -= dt; if (frag.rearm <= 0 && game.state === 'playing' && P.alive && (!mp.live || mp.alive)) try { G.weapon.setVisible(!knife.on); } catch { /* fine */ } }
       const c = frag.cook;
@@ -8099,6 +8106,8 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
           const beat = Math.ceil(c.t); if (beat !== c.beat) { c.beat = beat; try { G.audio.play('ui_hover', { gain: 1, pitch: c.t < 1.2 ? 1.6 : 1.1 }); } catch { /* fine */ } }
         }
       }
+      frag.acc = Math.min(.25, (frag.acc || 0) + dt);
+      for (; frag.acc >= 1 / 120; frag.acc -= 1 / 120) { const dt = 1 / 120;
       for (let i = frag.live.length - 1; i >= 0; i--) {
         const g = frag.live[i], v = g.vel;
         v.y -= FRAG.gravity * dt;
@@ -8115,13 +8124,14 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
             if (n.y > .5 && Math.abs(v.y) < 1.2) v.y = 0;
           }
         } else g.pos.addScaledVector(v, dt);
-        let floor = -1e9; try { floor = G.physics.groundHeight(g.pos.x, g.pos.z, g.pos.y + .6); } catch { floor = -1e9; }
+        let floor = -1e9; try { const dn = G.physics.raycast(_p.set(g.pos.x, g.pos.y + .6, g.pos.z), _b.set(0, -1, 0), 2.1); floor = dn ? dn.point.y : -1e9; } catch { floor = -1e9; }
         if (Number.isFinite(floor) && g.pos.y < floor + .06 && g.pos.y > floor - 1.5) { g.pos.y = floor + .06; if (v.y < 0) { v.y = -v.y * FRAG.bounce; v.x *= .72; v.z *= .72; if (v.y < 1.2) v.y = 0; } }
         if (g.pos.y < -6) { endFrag(g); continue; }
         g.spin += dt * (4 + v.length());
         g.mesh.position.copy(g.pos); g.mesh.rotation.set(g.spin, g.spin * .7, 0);
         g.t -= dt;
         if (g.t <= 0) burst(g);
+      }
       }
     }
     function refillFrags() { frag.left = FRAG.count; frag.next = 0; frag.cd = 0; frag.cook = null; cookEl.classList.remove('on'); fragHud(); }
@@ -8209,7 +8219,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     P.update = function (dt) {
       _playerUpdate.call(P, dt);
       let want = 0;
-      if (game.state === 'playing' && P.enabled && P.alive && !P.sprinting && (!mp.live || mp.alive)) want = (G.input.down('interact') ? 1 : 0) - (G.input.down('leanL') ? 1 : 0);
+      if (game.state === 'playing' && P.enabled && P.alive && !P.sprinting && (!mp.live || mp.alive)) want = window.__SALTLINE_PEEK ? window.__SALTLINE_PEEK(G) : (G.input.down('interact') ? 1 : 0) - (G.input.down('leanL') ? 1 : 0);
       lean.v += (want - lean.v) * Math.min(1, dt * 11);
       if (Math.abs(lean.v) < .004) { lean.v = 0; lean.off = 0; return; }
       const sgn = lean.v > 0 ? 1 : -1, rx = Math.cos(P.yaw) * sgn, rz = -Math.sin(P.yaw) * sgn;

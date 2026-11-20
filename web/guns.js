@@ -47,7 +47,7 @@
     sniper: {
       name: 'PAC-98 Lookout', short: 'Sniper', line: 'One shot, one bolt. Kills with a single hit; slow to aim and to fire again.',
       def: {
-        magSize: 5, reserve: 25, rpm: 120, damage: 105, range: 400, auto: false, adsTime: 0.34, inspect: false,
+        magSize: 5, reserve: 25, rpm: 120, damage: 105, range: 400, auto: false, adsTime: 0.22, inspect: false,
         flashLight: 85, flashScale: 1.7, smoke: true, ownShell: true, adsFov: 15, reloadAfter: 0.3,     // after the last round: straight to the magazine; the bolt is worked at the end
         spread: { hip: 0.055, ads: 0.0002, moveHip: 0.03, moveAds: 0.007, bloomHip: 0.02, bloomAds: 0.004, air: 0.09, crouch: 0.006, shot: 1, decay: 1.2 },
       },
