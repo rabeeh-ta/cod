@@ -31,7 +31,7 @@ export function applyMapHooks(html) {
 
   // 1. the map scripts load before the game, so the choice is made by the time the game starts
   hook(/<script>\n(?=\(\(\)=>\{var \w+=Object\.defineProperty;)/,
-    () => '<script src="/maps/colosseum.js"></script>\n<script src="/maps/alpine.js"></script>\n<script src="/maps/maram.js"></script>\n<script src="/maps.js"></script>\n<script>\n', 'the start of the game bundle');
+    () => '<script src="/maps/colosseum.js"></script>\n<script src="/maps/alpine.js"></script>\n<script src="/maps/maram.js"></script>\n<script src="/maps/area51.js"></script>\n<script src="/maps.js"></script>\n<script>\n', 'the start of the game bundle');
 
   // 2. boot: hand the constants to the map before anything reads them (it may move the sun, drop the sea, add a sound, ...)
   hook(/window\.__G=(\w+);/,

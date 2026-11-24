@@ -21,7 +21,7 @@
    players see the soldier tuck his knees, lean over and put his hand on the same spot (wire() goes out in the
    presence as `vt`, remote() poses it). */
 (() => {
-  const MIN = 0.45, MAX = 1.65, CLIMB = 1.2, REACH = 0.75, GAP = 0.85, CROUCH = 1.15, DEEP = 1.6, KNEE = 0.3, R = 0.32;
+  const MIN = 0.45, MAX = 1.65, CLIMB = 1.2, REACH = 0.75, GAP = 0.85, CROUCH = 1.15, DEEP = 1.6, KNEE = 0.3, R = 0.32, STEP = 0.42;
   const LANE = 0.19;   // how wide the path has to be: the body is 0.32 m round, but only head and shoulders go through a window (a 1 m window with its frame leaves 0.86 m)
   let v = null, why = '', seq = 0, sent = null, near = [], info = null;
   const no = w => { why = w; return false; };
@@ -96,7 +96,8 @@
   }
 
   /* One way over: straight along `yaw`, the line `off` metres to the side of the player. Returns the vault, or a reason. */
-  function plan(P, phys, boxes, yaw, off, speed, careful, MAXH) {
+  let climbAt = CLIMB;      // over this height, a top half a metre deep or more is climbed onto, not vaulted over (see choose)
+  function plan(P, phys, boxes, yaw, off, speed, careful, MAXH, STEPS) {
     const dir = { x: -Math.sin(yaw), z: -Math.cos(yaw) }, side = { x: Math.cos(yaw), z: -Math.sin(yaw) };
     const feet = P.pos.y, x0 = P.pos.x + side.x * off, z0 = P.pos.z + side.z * off;
     const ahead = d => [x0 + dir.x * d, z0 + dir.z * d];
@@ -114,7 +115,7 @@
     for (let d = front + 0.08; d <= front + DEEP; d += 0.04) { const [x, z] = ahead(d); if (!solid(boxes, x, z, 0.06, top - 0.12, top - 0.01)) { back = d; break; } }
     // onto it when it is deep, or higher than the chest and at least half a metre across the top (a block, a crate:
     // climbed onto, as in Call of Duty); over it when it is low or thin (a barrier, a sill, a wall)
-    const mantle = back < 0 || (h > CLIMB && back - front >= 0.5);
+    const mantle = back < 0 || (h > climbAt && back - front >= 0.5);
     const endD = !mantle ? back + R + 0.08 : back < 0 ? front + R + 0.2 : Math.min(front + R + 0.2, (front + back) / 2), lift = top + 0.03;
     const [ex, ez] = ahead(endD);
     // 4. room at the far side (crouching), inside the map
@@ -149,7 +150,12 @@
     let head = Infinity;
     for (let i = 1; i <= 24; i++) {
       at(o, i / 24, p);
-      if (solid(boxes, p.x, p.z, LANE, p.y + 0.02, p.y + GAP)) { const k = hitBox; return 'path blocked at ' + i + '/24 by ' + [k.min.x, k.min.y, k.min.z, k.max.x, k.max.y, k.max.z].map(r2).join(','); }
+      // on a map that asks for it (level.vaultSteps: Area 51's stair rails), going over something, until the hands reach
+      // its top the feet are still on the ground they stood on, and what the game would step up onto (STEP) is no
+      // obstacle: on a stair the next tread up is always this close beside the player. Never for a mantle: up a stair
+      // that would turn a jump into a climb onto the steps above
+      const lo = STEPS && !mantle && i / 24 * T < ta ? Math.max(p.y + 0.02, feet + STEP) : p.y + 0.02;
+      if (solid(boxes, p.x, p.z, LANE, lo, p.y + GAP)) { const k = hitBox; return 'path blocked at ' + i + '/24 by ' + [k.min.x, k.min.y, k.min.z, k.max.x, k.max.y, k.max.z].map(r2).join(','); }
       if (p.y >= lift - 0.01) head = Math.min(head, ceiling(boxes, p.x, p.z, LANE, p.y + 0.02) - p.y);
     }
     // through a window the view stays under its top: the body goes through low, as in a dive
@@ -172,6 +178,8 @@
     const phys = G && G.physics, all = phys && phys.boxes;
     if (!all) return 'no map';
     const MAXH = Math.min(1.95, (G.level && G.level.vaultMax) || MAX);   // a map may allow more (Alpine: 1.95 m, see its file)
+    const STEPS = !!(G.level && G.level.vaultSteps);   // and may let a vault start beside a step (see plan)
+    climbAt = Math.min(CLIMB, (G.level && G.level.vaultClimb) || CLIMB);   // and may climb onto lower deep tops (Area 51: 0.85 m; a jump at a 1.1 m compressor threw the player over it)
     const feet = P.pos.y, px = P.pos.x, pz = P.pos.z, span = R + REACH + DEEP + R + 1.0;
     near.length = 0;   // only the boxes within reach of any of the ways over: a map can have tens of thousands
     for (let i = 0; i < all.length; i++) {
@@ -184,7 +192,7 @@
     const yaws = d > 0.02 && d < 0.62 ? [snap, P.yaw] : [P.yaw];
     let first = null;
     for (const careful of [false, true]) for (const yaw of yaws) for (const off of OFFS) {
-      const r = plan(P, phys, near, yaw, off, speed, careful, MAXH);
+      const r = plan(P, phys, near, yaw, off, speed, careful, MAXH, STEPS);
       if (typeof r === 'object') return r;
       if (first === null && yaw === P.yaw && off === 0) first = r;
     }

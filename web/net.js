@@ -666,6 +666,19 @@
       .fe-set svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; }
       .fe-set svg circle { fill: var(--ink, #0b0d0f); }
       html.net-settings #ui .m-screen[data-s="title"] { visibility: hidden !important; }
+      /* the map intro: the first time into a match, seven seconds over the whole map, then in */
+      html.net-intro #ui .m-screen, html.net-intro .m-veil, html.net-intro .menu { visibility: hidden !important; }   /* the menu's dark veil too: left on, it dimmed the whole flyover (he: "toooo dark") */
+      .net-intro { position: fixed; inset: 0; z-index: 2147483000; pointer-events: auto; cursor: none; font-family: inherit; color: #f2efe8; }
+      .net-intro .ni-bar { position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height .7s cubic-bezier(.2,.7,.2,1); }
+      .net-intro .ni-bar.t { top: 0; } .net-intro .ni-bar.b { bottom: 0; }
+      .net-intro.on .ni-bar { height: 10vh; }
+      .net-intro .ni-name { position: absolute; left: 6vw; bottom: calc(10vh + 5vh); opacity: 0; transform: translateY(10px); transition: opacity .8s ease, transform .8s ease; }
+      .net-intro.named .ni-name { opacity: 1; transform: none; }
+      .net-intro .ni-name b { display: block; font-size: clamp(30px, 5.2vw, 72px); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; line-height: 1; text-shadow: 0 2px 18px rgba(0,0,0,.45); }
+      .net-intro .ni-name small { display: block; margin-top: 10px; font-size: clamp(12px, 1.3vw, 16px); letter-spacing: .28em; text-transform: uppercase; opacity: .85; }
+      .net-intro .ni-skip { position: absolute; right: 4vw; bottom: 3.2vh; font-size: 12px; letter-spacing: .18em; text-transform: uppercase; opacity: .55; transition: opacity .2s; }
+      .net-intro .ni-skip.ask { opacity: 1; color: var(--signal, #ffb347); }
+      @media (prefers-reduced-motion: reduce) { .net-intro .ni-bar, .net-intro .ni-name { transition: none; } }
       /* the room lobby: changing the map while others are in a match asks first */
       .fe-confirm { margin-top: 12px; padding: 14px 16px; border: 1px solid var(--signal, #ffb347); background: rgba(34,27,16,.9); border-radius: 2px; }
       .fe-confirm[hidden] { display: none; }
@@ -964,11 +977,11 @@
     /* Maps. The game builds one map per page load (see web/maps.js), so playing another reloads the page into it. Picking
        a map card only marks it; the reload comes with Find match (or with joining a room that plays another map). */
     const maps = window.__saltlineMaps || { list: [{ id: 'terminal', name: 'Saltline Terminal' }], id: 'terminal', ready: Promise.resolve('terminal'), name: () => 'Saltline Terminal', choose: () => false };
-    const mapId = () => maps.id, loadingText = () => ({ terminal: 'Loading the yard…', alpine: 'Loading the village…', maram: 'Loading the town…' }[mapId()] || 'Loading the arena…');   // a room link learns its map a moment after the page starts, so always ask
+    const mapId = () => maps.id, loadingText = () => ({ terminal: 'Loading the yard…', alpine: 'Loading the village…', maram: 'Loading the town…', area51: 'Loading the base…' }[mapId()] || 'Loading the arena…');   // a room link learns its map a moment after the page starts, so always ask
     const post = (path, body) => fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     // reload into a map (and a path) without changing the one the player has chosen as theirs
     const visit = (id, path) => maps.choose(id, path, false) || (location.assign(path), true);
-    const MAP_INFO = { terminal: 'Container harbour at first light', colosseum: 'Sand floor of a ruined arena', alpine: 'War-torn village under the Alps', maram: 'Walled desert town under rocky hills' };
+    const MAP_INFO = { terminal: 'Container harbour at first light', colosseum: 'Sand floor of a ruined arena', alpine: 'War-torn village under the Alps', maram: 'Walled desert town under rocky hills', area51: 'Fenced motor pool in the open desert' };
     const MODE_LIST = [
       { id: 'tdm', name: 'Team deathmatch', blurb: 'Red against Blue. The team with the most kills in five minutes wins.' },
       { id: 'dm', name: 'Deathmatch', blurb: 'Everyone for themselves. Top of the board wins.' },
@@ -1167,10 +1180,64 @@
       return false;
     }
     // into the match of this room: Deathmatch, or the team the player picked (0 Red, 1 Blue)
-    async function joinMatch(mode, team) {
+    /* The map intro (he asked, 24 Nov): the first time a player comes into a match from the menus (quick play, a team pick, a private
+       room, joining one already under way), seven seconds of the camera wheeling over the whole map, high and coming lower, with
+       the map's name and the mode, before the join. Not when a reload takes them back into the match they were in, and once per
+       page (between rounds and after a death the game plays on as before). The player is not in the match while it plays, so nobody
+       can see or shoot them, and it holds up nobody. Space twice skips it (the first press asks, the second within 2.5 s confirms);
+       on a touch screen, two taps. The camera is moved before the game's frame (a camera moved in a pre-pass leaves the gun behind). */
+    const mapIntro = (() => {
+      const LEN = 7, ease = t => t * t * (3 - 2 * t);
+      let seen = false;
+      return {
+        get seen() { return seen; },
+        play(mode) {
+          seen = true;
+          return new Promise(async done => {
+            for (let k = 0; k < 120 && gameState() !== 'title'; k++) await sleep(250);         // the map still loading: wait for it, up to 30 s
+            const g = G(); if (!g || !g.render || !g.render.frame || !g.camera || gameState() !== 'title') { done(() => {}); return; }
+            const T = g.THREE, L = g.level || {}, pts = (L.enemySpawns || []).map(s => s.pos).filter(Boolean);
+            if (!pts.length && L.playerStart && L.playerStart.pos) pts.push(L.playerStart.pos);
+            const C = new T.Vector3(); for (const p of pts) C.add(p); if (pts.length) C.multiplyScalar(1 / pts.length);
+            let R = 20; for (const p of pts) R = Math.max(R, Math.hypot(p.x - C.x, p.z - C.z));
+            const a0 = Math.atan2(g.camera.position.z - C.z, g.camera.position.x - C.x) || 0, eye = new T.Vector3(), at = new T.Vector3();
+            const box = document.createElement('div'); box.className = 'net-intro';
+            box.innerHTML = '<div class="ni-bar t"></div><div class="ni-bar b"></div><div class="ni-name"><b></b><small></small></div><div class="ni-skip">Press Space twice to skip</div>';
+            box.querySelector('b').textContent = maps.name(mapId()); box.querySelector('small').textContent = (MODE_LIST.find(m => m.id === mode) || {}).name || '';
+            const skipEl = box.querySelector('.ni-skip'), touch = matchMedia('(pointer: coarse)').matches; if (touch) skipEl.textContent = 'Tap twice to skip';
+            const gateWas = gate.hidden; gate.hidden = true; document.documentElement.classList.add('net-intro'); document.body.appendChild(box);
+            requestAnimationFrame(() => box.classList.add('on')); setTimeout(() => box.classList.add('named'), 600);
+            const t0 = performance.now(); let end = LEN, asked = 0, black = false;
+            const frame = g.render.frame, fov0 = g.camera.fov;
+            g.render.frame = function (...args) {
+              const t = Math.min(end, (performance.now() - t0) / 1000), u = ease(Math.min(1, t / LEN)), cam = g.camera;
+              const a = a0 + u * 2.0, d = R * (1.35 - 0.5 * u), h = Math.max(14, R * (0.78 - 0.38 * u));
+              eye.set(C.x + Math.cos(a) * d, C.y + h, C.z + Math.sin(a) * d); at.set(C.x + Math.cos(a + 1.2) * R * 0.25, C.y, C.z + Math.sin(a + 1.2) * R * 0.25);
+              cam.position.copy(eye); cam.lookAt(at); if (Math.abs(cam.fov - 60) > 0.01) { cam.fov = 60; cam.updateProjectionMatrix(); } cam.updateMatrixWorld(true);
+              const post = g.render.post; if (post) post.fade = black ? 1 : Math.max(1 - t / 0.8, Math.min(1, Math.max(0, (t - (end - 0.6)) / 0.6)));
+              return frame.apply(this, args);
+            };
+            const finish = () => { if (black) return; black = true; clearInterval(tick); removeEventListener('keydown', key, true); box.removeEventListener('pointerdown', tap);
+              done(ok => {     // called once the join has gone through (or not): back to the game's own frame, the bars away
+                g.render.frame = frame; if (g.camera.fov !== fov0 && !g.params?.fov) { g.camera.fov = fov0; g.camera.updateProjectionMatrix(); }
+                if (g.render.post) g.render.post.fade = 0; document.documentElement.classList.remove('net-intro'); box.remove(); if (!ok) gate.hidden = gateWas; }); };
+            const tick = setInterval(() => { if ((performance.now() - t0) / 1000 >= end) finish(); }, 50);
+            const skip = () => { const now = performance.now(); if (now - asked < 2500) { end = Math.min(end, (now - t0) / 1000 + 0.6); skipEl.textContent = 'Skipping'; return; }
+              asked = now; skipEl.classList.add('ask'); skipEl.textContent = touch ? 'Tap again to skip' : 'Press Space again to skip';
+              setTimeout(() => { if (performance.now() - asked >= 2400 && !black) { skipEl.classList.remove('ask'); skipEl.textContent = touch ? 'Tap twice to skip' : 'Press Space twice to skip'; } }, 2500); };
+            const key = e => { if (e.code === 'Space') { e.preventDefault(); e.stopPropagation(); if (!e.repeat) skip(); } }, tap = e => { e.preventDefault(); skip(); };
+            addEventListener('keydown', key, true); box.addEventListener('pointerdown', tap);
+          });
+        },
+      };
+    })();
+
+    async function joinMatch(mode, team, { intro = true } = {}) {
       if (mode !== 'dm' && team !== 0 && team !== 1) return false;
       joining = true;
+      const introDone = intro && !mapIntro.seen ? await mapIntro.play(mode) : null;
       const ok = await press(mode === 'dm' ? '.mp-lobby [data-mp="join-dm"]' : `.mp-lobby [data-mp="join-t${team}"]`, 30000);
+      if (introDone) introDone(ok);
       joining = false;
       if (ok && (session.kind === 'public' || session.kind === 'private')) resume.set({ kind: session.kind, code: session.code, mode, team, map: mapId() });
       return ok;
@@ -1445,7 +1512,7 @@
         if (again && again.kind === 'private' && again.code === code) {   // reloaded in the middle of this room's match: straight back in
           pick.roomMode = again.mode === 'dm' ? 'dm' : 'tdm'; roomModeSet = true;
           setBusy(true); status('Back into the match…', 'busy');
-          joinMatch(again.mode, again.team).then(ok => { setBusy(false); if (ok) { gate.hidden = true; status(''); } else { resume.clear(); status('Could not get back into the match. Join it again.', 'err'); paintRoom(); } });
+          joinMatch(again.mode, again.team, { intro: false }).then(ok => { setBusy(false); if (ok) { gate.hidden = true; status(''); } else { resume.clear(); status('Could not get back into the match. Join it again.', 'err'); paintRoom(); } });
         }
         // maps.js already asked this room for its map before the game started; if that answer came too late, load the right map now
         Promise.all([fetch('/api/rooms/' + code).then(r => r.json()), maps.ready]).then(([info, now]) => {
@@ -1460,7 +1527,7 @@
         if (again.map !== mapId() && maps.list.some(m => m.id === again.map)) { visit(again.map, '/'); return; }
         pick.mode = again.mode; show('quick'); gate.hidden = false; setBusy(true); status('Back into the match…', 'busy');
         startRoom(again.code, 'public'); session.mode = again.mode;
-        joinMatch(again.mode, again.team).then(ok => { setBusy(false); if (ok) { gate.hidden = true; status(''); } else { resume.clear(); status('Could not get back into the match. Find another.', 'err'); } });
+        joinMatch(again.mode, again.team, { intro: false }).then(ok => { setBusy(false); if (ok) { gate.hidden = true; status(''); } else { resume.clear(); status('Could not get back into the match. Find another.', 'err'); } });
         return;
       }
       if (play === 'dm' || play === 'tdm') { pick.mode = play; show('quick'); gate.hidden = false; quickPlay(play); }
