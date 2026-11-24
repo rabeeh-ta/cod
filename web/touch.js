@@ -15,6 +15,8 @@
     { id: 'swap', sel: '.touch .t-swap', name: 'Swap weapon', label: 'SWAP', w: 54, r: 92, b: 196 },
     { id: 'interact', sel: '.touch .t-interact', name: 'Use', label: 'USE', w: 68, r: 186, b: 96 },
     { id: 'frag', sel: '.mp-fragbtn', name: 'Frag grenade', label: 'FRAG', w: 54, r: 186, b: 24 },
+    { id: 'pickup', sel: '.bag-pickbtn', name: 'Pick up (shown near a gun on the ground)', label: 'PICK', w: 64, r: 268, b: 84 },
+    { id: 'bag', sel: '.bag-btn', name: 'Bag', label: 'BAG', w: 42, r: 162, t: 12, sq: true },
     { id: 'pause', sel: '.touch .t-pause', name: 'Pause', label: 'II', w: 42, r: 12, t: 12, sq: true },
     { id: 'score', sel: '.mp-scorebtn', name: 'Scores', label: 'SCORE', w: 42, r: 62, t: 12, sq: true },
     { id: 'mic', sel: '.mp-micbtn', name: 'Mic', label: 'MIC', w: 42, r: 112, t: 12, sq: true },

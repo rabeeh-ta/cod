@@ -11,11 +11,12 @@
    It also owns the front end around the matches: home, quick play, private match and the room lobby.
    Loaded as a plain <script> right before the multiplayer layer, so window.claude exists when that layer starts.
    It brings in touch.js too: the layout editor for the touch buttons (Settings → Touch controls), fullmap.js: the
-   whole map in the top right corner of the pause screen, and fragpath.js: the path of a cooked grenade. */
+   whole map in the top right corner of the pause screen, fragpath.js: the path of a cooked grenade, and bag.js: the two
+   things a player carries in a match and the guns left on the ground (B opens the bag, G picks a gun up). */
 (() => {
   'use strict';
 
-  for (const src of ['/touch.js', '/fullmap.js', '/fragpath.js']) { const s = document.createElement('script'); s.src = src; s.async = true; document.head.appendChild(s); }
+  for (const src of ['/touch.js', '/fullmap.js', '/fragpath.js', '/bag.js']) { const s = document.createElement('script'); s.src = src; s.async = true; document.head.appendChild(s); }
 
   const CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
   const MAX = 10;
@@ -80,6 +81,15 @@
     const before = new Set(); let helloSeen = false; // the players already in the room when this page first joined it: they came first
     const sent = {}; // key -> JSON of the value last sent, so only changed keys go on the wire
     const listeners = new Set();
+    // the guns on the ground (web/bag.js): the room's list and its changes, as they come. The list is also kept here, so
+    // a listener that starts late (the bag waits for the game to be built; the room's hello comes first) still gets it
+    const dropFns = new Set(); let dropList = [];
+    const toDrops = d => {
+      if (Array.isArray(d.list)) dropList = d.list.slice();
+      if (d.took) dropList = dropList.filter(i => i.id !== d.took.id);
+      if (Array.isArray(d.add)) dropList = dropList.concat(d.add);
+      for (const f of dropFns) try { f(d); } catch (e) { console.error('[net] drops', e); }
+    };
 
     const list = () => joined ? [me, ...peers.values()] : [];
     const peerOf = (peer, by, p) => ({ peer, by, kind: 'viewer', presence: p || {}, sameTab: false });
@@ -138,6 +148,7 @@
         if (Object.keys(me.presence).length) sendRaw({ t: 'p', full: true, d: me.presence }); // after a reconnect
         clearInterval(pingT); pingT = setInterval(() => { if (ws && ws.readyState === 1) ws.send('ping'); }, 20000);
         hooks.onHello([...peers.keys()]);
+        toDrops({ list: Array.isArray(m.drops) ? m.drops : [], now: m.now, hello: true }); // every hello replaces the list (a reconnect may have missed changes)
         if (typeof m.map === 'string') hooks.onMap(m.map, '', true);
         notify(true);
       } else if (m.t === 'join') {
@@ -159,6 +170,8 @@
         hooks.onSig(m.from, m.d);
       } else if (m.t === 'map' && typeof m.map === 'string') {
         hooks.onMap(m.map, m.peer || '', false);
+      } else if (m.t === 'drops') {
+        toDrops(m);
       }
     }
 
@@ -193,6 +206,12 @@
       // a private room's map: everyone in the room moves to it (the server answers everyone with {t:'map'})
       setMap(map) { if (!joined) return false; sendRaw({ t: 'map', d: { map } }); return true; },
       mine: () => me.presence,
+      // guns on the ground (see src/worker.js): put some down, take one (in exchange for put), ask for the list again
+      drop(items) { if (!joined) return false; sendRaw({ t: 'drop', d: { items } }); return true; },
+      take(id, put) { if (!joined) return false; sendRaw({ t: 'take', d: put ? { id, put } : { id } }); return true; },
+      askDrops() { if (!joined) return false; sendRaw({ t: 'drops', d: {} }); return true; },
+      onDrops(fn) { dropFns.add(fn); if (joined) { const list = dropList.slice(); setTimeout(() => { if (dropFns.has(fn)) try { fn({ list, now: realNow() + skew }); } catch (e) { console.error('[net] drops', e); } }, 0); } return () => dropFns.delete(fn); },
+      serverNow: () => realNow() + skew, // the room's clock, untouched by anything that moves Date.now
       get: peer => peers.get(peer),
       earlier: peer => before.has(peer), // in the room before this page joined it (everyone agrees on who came first)
     };
@@ -452,6 +471,7 @@
   window.__net = { session, voice: () => voice.debug(), room: () => room }; // for the console: __net.voice(); the room for the colour rows
   const user = { id: () => Promise.resolve(uid), profiles: () => Promise.resolve({}) };
 
+  window.__SALTLINE_ROOM = () => roomReady; // the room for the rest of the page (web/bag.js), once it is set up
   window.claude = {
     use(name) {
       switch (name) {
@@ -886,7 +906,7 @@
     /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
        whoever goes looking. Add a new entry at the top with each release. */
     const UPDATES = [
-      ['24 Nov 2026', ['Kills and deaths stay right all evening: a kill on a player whose connection drops and comes back still counts, a reload (or a page the browser reloads by itself, or a map change) brings back your kills for the round, and a new round starts at zero even for anyone who was in the menus when it began', 'Team deathmatch: kills stay with the team they were made for. Change sides and your old team keeps them, as a row of their own', 'The kill feed says when someone is back, reloaded, or joined the other team', 'Ctrl+R no longer reloads the page in the middle of play (Ctrl is a crouch key); pause first to reload']],
+      ['24 Nov 2026', ['Guns drop when a player goes down, and lie there for a minute. Walk up to one and hold G to swap it for what is in your hands: you can carry two guns, two of the same gun, or a gun and the knife, and the gun keeps its rounds (two of a kind share their spare). B opens your bag at the bottom right: drag (or the arrow keys) to change which is 1 and which is 2. The gun to come back with is chosen on the card shown when you are down', 'Kills and deaths stay right all evening: a kill on a player whose connection drops and comes back still counts, a reload (or a page the browser reloads by itself, or a map change) brings back your kills for the round, and a new round starts at zero even for anyone who was in the menus when it began', 'Team deathmatch: kills stay with the team they were made for. Change sides and your old team keeps them, as a row of their own', 'The kill feed says when someone is back, reloaded, or joined the other team', 'Ctrl+R no longer reloads the page in the middle of play (Ctrl is a crouch key); pause first to reload']],
       ['20 Nov 2026', ['Grenades: while you hold F, red dots show where it will fly up to the first thing it hits, a ring marks that spot and a small mark shows where it ends up; the two marks show through walls. Aim (right click) while holding it puts the grenade back', 'Grenades bounce less, and fly the same at any frame rate', 'Alpine: a grenade thrown high no longer ends up on top of a roof', 'A grenade thrown in at a window stays on that floor: near the ceiling it used to jump to the floor above', 'Deathmatch: choose your colour on the Quick play screen, in the room lobby and on the pause screen. A colour someone else has is crossed out and says who has it; whoever was in the room first keeps it', 'Settings → Peek: Hold, Mixed or Toggle. Crouch gets Mixed too: a tap toggles, a press held half a second works as hold', 'Team play: a player who leaves and comes back is one row on the board, and every round starts with nobody left over', 'Teammates\' footsteps are much quieter', 'The sniper scope comes up faster: 0.22 s, down from 0.34', 'Back works again on the team screen after leaving a match', 'Alpine: walk through the bushes; the garden fence behind the corner house on the north-west, the bush beside it and the back door of the ruin on the street are gone']],
       ['19 Nov 2026', ['A fourth map: Maram, a walled desert town under rocky hills in the morning sun, with two sites, a long road and tunnels', 'The whole map in the top right corner of the pause screen: where you are and the way you face, your team in Team deathmatch, the ammo sets, and anyone who has just fired', 'Settings → Crouch: hold the key, or press it once to go down and again to stand', 'The mouse wheel changes weapon while you sprint', 'Maram: smooth over slopes and stairs, the gun included', 'Typed radio (T) is gone; voice chat (V) stays']],
       ['18 Nov 2026', ['Vaulting: jump while running at a low wall, a barrier, a crate or a window sill and you go over it, through the window, or up onto it when it is higher than your chest. It keeps your speed, finds a window without lining up on it exactly, and puts your hands on the ledge; other players see you climb', 'Peeking (Q / E) now shows your soldier as far out as you can see: no more seeing round a corner while staying hidden', 'Reloading the page takes you straight back into the match you were in', 'Through the sniper scope Z steps the zoom (2x, 4x, 6x, 10x), so it works while you move', 'No fall damage from any drop under about 5 m: jump or vault out of an upstairs window', 'Alpine: two houses on the street can be entered, with a stair up to a room with a wide window; a stair to a veranda in the ruin by the well sign; a doorway into the stone ruin from the alley; the stone blocks and crates stand 1.35 to 1.95 m and are spread across the lanes; upstairs windows can be vaulted out of', 'A room\'s map can be changed from its lobby: everyone in the room moves to the new map together', 'Settings at the top of every menu screen', 'The pause screen of a room shows its code and a Copy link button of their own', 'Touch screens: move, resize and fade every button (Settings, Touch controls)', 'Phones held sideways: the first screen fits without scrolling']],

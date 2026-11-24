@@ -29,6 +29,19 @@
 //                     {t:'error', code}  followed by a close (4000 bad request, 4001 full, 4004 no such room)
 //   client -> server  {t:'p', d:{…changed presence keys…}, full?:true} · {t:'sig', to, d}
 //                     {t:'map', d:{map}}      change a private room's map (public rooms keep theirs: quick play finds them by map)
+//
+// Guns on the ground. A player who goes down drops their guns, and anyone can pick one up in exchange for what they hold.
+// The room keeps the list (in storage: it outlives hibernation) and is the referee: the first take of an item wins, so
+// two players can never both walk off with the same gun. Items last DROP_TTL_MS, pruned whenever the list is read.
+//   item  {id, g, m, r, x, y, z, yw, rd, md, at, by, tk?, of?}   g rifle|shotgun|sniper|knife, m rounds in it, r spare
+//                                  rounds that go with it, rd the round and md the mode it was dropped in, at the server's
+//                                  time, by who dropped it; tk/of on an item put down in a swap: who took what (a page
+//                                  whose answer was lost settles its swap from the next list)
+//   client -> server  {t:'drop', d:{items:[{g,m,r,x,y,z,yw,rd,md}]}}   at most 3 at a time
+//                     {t:'take', d:{id, put?:{g,m,r}}}   take an item; put goes down where it lay
+//                     {t:'drops', d:{}}                  ask for the list again
+//   server -> client  {t:'drops', now, add?:[item], took?:{id, by, item}, fail?:id, list?:[item]}   add and took go to
+//                     everyone (the sender too); fail and list only to the one who asked. hello carries drops:[item]
 
 import { DurableObject } from "cloudflare:workers";
 
@@ -42,7 +55,10 @@ const EMPTY_TTL_MS = 30 * 60 * 1000; // an empty room is deleted after 30 minute
 const MAX_MSG_BYTES = 12288;
 const MAX_MSGS_PER_SEC = 60; // presence is ~15/s; voice setup sends a short burst of ICE candidates
 const MAPS = ["terminal", "colosseum", "alpine", "maram"];
-const MODES = ["dm", "tdm"]; // Deathmatch and Team deathmatch; the first is the default // the first is the game's own harbour; the others are the files in web/maps/
+const MODES = ["dm", "tdm"];
+const DROP_GUNS = ["rifle", "shotgun", "sniper", "knife"];
+const DROP_TTL_MS = 60 * 1000; // a gun on the ground lasts a minute
+const MAX_DROPS = 48; // the oldest go first beyond this (ten players dying twice each in a minute is about 40) // Deathmatch and Team deathmatch; the first is the default // the first is the game's own harbour; the others are the files in web/maps/
 const STUN_ONLY = [{ urls: ["stun:stun.cloudflare.com:3478"] }];
 const CENSUS_AUDIT_MS = 60 * 1000; // how often the census re-checks rooms that have been quiet
 const CENSUS_STALE_MS = 2 * 60 * 1000; // a room quiet this long is asked for its real count
@@ -52,6 +68,20 @@ const json = (data, status = 200) =>
     status,
     headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
+
+// an item a page wants on the ground, checked; null if anything about it is off
+const fin = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
+const whole = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+function dropItem(o, at, by) {
+  if (!o || typeof o !== "object" || !DROP_GUNS.includes(o.g)) return null;
+  const knife = o.g === "knife";
+  const m = knife ? 0 : o.m, r = knife ? 0 : o.r;
+  if (!whole(m, 0, 200) || !whole(r, 0, 9999)) return null;
+  if (!fin(o.x, -2000, 2000) || !fin(o.y, -200, 400) || !fin(o.z, -2000, 2000) || !fin(o.yw, -100, 100)) return null;
+  if (!whole(o.rd, 0, 1e9) || !MODES.includes(o.md)) return null;
+  const id = Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 7);
+  return { id, g: o.g, m, r, x: Math.round(o.x * 100) / 100, y: Math.round(o.y * 100) / 100, z: Math.round(o.z * 100) / 100, yw: Math.round(o.yw * 1000) / 1000, rd: o.rd, md: o.md, at, by };
+}
 
 // the map and mode a request asks for, from its JSON body
 async function choiceOf(request) {
@@ -159,6 +189,14 @@ export class Room extends DurableObject {
     });
   }
 
+  // the guns on the ground now, the expired ones gone (saved only when something went)
+  async drops() {
+    const all = (await this.ctx.storage.get("drops")) || [], now = Date.now();
+    const live = all.filter((d) => now - d.at < DROP_TTL_MS);
+    if (live.length !== all.length) await this.ctx.storage.put("drops", live);
+    return live;
+  }
+
   broadcast(msg, except) {
     const s = typeof msg === "string" ? msg : JSON.stringify(msg);
     for (const ws of this.sockets(except)) {
@@ -231,8 +269,9 @@ export class Room extends DurableObject {
 
     server.serializeAttachment({ peer, by, p: kept || {} });
     const map = (await this.ctx.storage.get("map")) || MAPS[0];
+    const drops = await this.drops();
     server.send(JSON.stringify({
-      t: "hello", you: peer, code, max: MAX_PLAYERS, now: Date.now(), map,
+      t: "hello", you: peer, code, max: MAX_PLAYERS, now: Date.now(), map, drops,
       peers: others.map((ws) => { const a = ws.deserializeAttachment(); return { peer: a.peer, by: a.by, p: a.p }; }),
     }));
     if (!kept) this.broadcast({ t: "join", peer, by }, server);
@@ -262,7 +301,32 @@ export class Room extends DurableObject {
       // a private room's map, changed from its lobby. Everyone moves to it, so nobody plays a different map in the same room
       if (await this.ctx.storage.get("mm")) return;
       if (m.d.map === MAPS[0]) await this.ctx.storage.delete("map"); else await this.ctx.storage.put("map", m.d.map);
+      await this.ctx.storage.delete("drops"); // they lay on the old map
       this.broadcast({ t: "map", map: m.d.map, peer: a.peer });
+    } else if (m.t === "drop" && Array.isArray(m.d.items) && m.d.items.length && m.d.items.length <= 3) {
+      // a player went down: their guns on the ground, for everyone (the sender too: everyone shows the room's copy)
+      const now = Date.now(), add = [];
+      for (const o of m.d.items) { const it = dropItem(o, now, a.peer); if (it) add.push(it); }
+      if (!add.length) return;
+      const list = (await this.drops()).concat(add).slice(-MAX_DROPS);
+      await this.ctx.storage.put("drops", list);
+      this.broadcast({ t: "drops", now, add });
+    } else if (m.t === "take" && typeof m.d.id === "string") {
+      // the first to ask gets it. Read, check and write with nothing awaited in between: the object takes no other
+      // message until this one's storage calls are done, so two takes of one item can't both win
+      const now = Date.now(), list = await this.drops(), i = list.findIndex((d) => d.id === m.d.id);
+      if (i < 0) { try { ws.send(JSON.stringify({ t: "drops", now, fail: m.d.id })); } catch { /* gone */ } return; }
+      const item = list[i];
+      list.splice(i, 1);
+      let put = null;
+      if (m.d.put) {
+        put = dropItem({ ...m.d.put, x: item.x, y: item.y, z: item.z, yw: item.yw, rd: item.rd, md: item.md }, now, a.peer);
+        if (put) { put.tk = a.peer; put.of = item.id; list.push(put); }
+      }
+      await this.ctx.storage.put("drops", list.slice(-MAX_DROPS));
+      this.broadcast({ t: "drops", now, took: { id: item.id, by: a.peer, item }, add: put ? [put] : [] });
+    } else if (m.t === "drops") {
+      try { ws.send(JSON.stringify({ t: "drops", now: Date.now(), list: await this.drops() })); } catch { /* gone */ }
     } else if (m.t === "sig" && typeof m.to === "string") {
       // voice chat: offers, answers and ICE candidates go to one peer only
       const out = JSON.stringify({ t: "sig", from: a.peer, d: m.d });

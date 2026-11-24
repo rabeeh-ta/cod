@@ -12,7 +12,8 @@
 
    The game reaches this file through the hooks in scripts/gun-hooks.mjs and nowhere else:
      __SALTLINE_GUNS.build(d, table, list)   called while the game sets up its guns; adds ours to the same table
-     weapon.primary                           the gun the player brought (rifle, shotgun or sniper); swap and "1" pick it
+     weapon.primary                           the gun the player brought (rifle, shotgun or sniper); in a match, the gun of
+                                              the bag's slot in use (web/bag.js)
      weapon.adsFov                            how far the view narrows when aiming (the sniper's scope)
      def.shoot / def.ownShell                 a gun that fires or ejects its own way
 
@@ -551,98 +552,12 @@
     requestAnimationFrame(tick);
   }
 
-  /* Choosing the next gun during a match: B opens a panel over the game with the three guns, large.
-
-     The mouse is captured while playing, so there is no pointer to click with. The panel is worked the way the mouse
-     and keys already move: slide the mouse (or A / D, or the arrows) to move along the cards, click (or Enter) to take
-     the one that is lit; 1, 2 and 3 take a gun straight away. While it is open the player stands still and a click
-     never fires. On a touch screen, or where the mouse is free, the cards are simply tapped or clicked.
-
-     The gun in the hands never changes in the middle of a life: the pick is the gun to come back with. */
-  let menuEl = null;
-  function gunMenu(g) {
-    const css = document.createElement('style');
-    css.textContent = `.gun-menu { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; opacity: 0; pointer-events: none; transition: opacity .16s ease;
-        background: radial-gradient(ellipse at 50% 50%, rgba(11, 13, 15, .9) 0%, rgba(11, 13, 15, .8) 60%, rgba(11, 13, 15, .66) 100%); }      /* over the game's own text, so nothing shows through the panel */
-      .gun-menu.on { opacity: 1; pointer-events: auto; }
-      .gun-menu-panel { display: grid; justify-items: center; gap: 22px; width: min(1040px, 100%); text-align: center; }
-      .gun-menu-head { display: grid; gap: 10px; justify-items: center; }
-      .gun-menu-head u { font: 600 12px/1 var(--f-label); text-decoration: none; letter-spacing: .28em; margin-right: -.28em; text-transform: uppercase; color: var(--signal, #ffb347); }
-      .gun-menu-head strong { font: 900 clamp(34px, 5.4vw, 60px)/.92 var(--f-display); letter-spacing: .06em; text-transform: uppercase; color: var(--bone, #e8e4da); }
-      .gun-menu-head small { font: 400 17px/1.3 var(--f-label); color: var(--bone-dim, rgba(232, 228, 218, .64)); }
-      .gun-menu-cards { width: 100%; }
-      .gun-menu-keys { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; font: 500 12px/1 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--bone-dim, rgba(232, 228, 218, .64)); }
-      .gun-menu-keys kbd { margin-right: 6px; }
-      .gun-menu-said { min-height: 22px; font: 700 22px/1 var(--f-display); letter-spacing: .06em; text-transform: uppercase; color: var(--signal, #ffb347); }
-      .mp-ui .gun-key { position: absolute; right: var(--gr); bottom: calc(264px + var(--sab)); display: flex; align-items: center; gap: 8px; opacity: 0; transition: opacity .25s; font: 600 11px/1 var(--f-label); letter-spacing: .26em; text-transform: uppercase; color: rgba(232, 228, 218, .82); text-shadow: var(--shadow); }
-      .mp-ui .gun-key kbd { letter-spacing: 0; } .mp-ui .gun-key b { font-weight: 600; margin-right: -.1em; }
-      .mp-ui.live.play .gun-key { opacity: 1; }
-      @media (max-height: 560px) { .mp-ui .gun-key { bottom: calc(238px + var(--sab)); } .gun-menu-panel { gap: 12px; } .gun-menu-head small { display: none; } }
-      @media (prefers-reduced-motion: reduce) { .gun-menu { transition: none; } }`;
-    document.head.appendChild(css);
-    menuEl = document.createElement('div'); menuEl.className = 'gun-menu'; menuEl.setAttribute('role', 'dialog'); menuEl.setAttribute('aria-label', 'Gun for your next life');
-    menuEl.innerHTML = `<div class="gun-menu-panel">
-      <div class="gun-menu-head"><u>Next life</u><strong>Choose your gun</strong><small>The gun in your hands stays until you go down.</small></div>
-      <div class="gun-menu-cards"></div>
-      <div class="gun-menu-said" role="status"></div>
-      <div class="gun-menu-keys"><span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>Take a gun</span><span><kbd>A</kbd><kbd>D</kbd>or the mouse: move</span><span><kbd>Click</kbd>or<kbd style="margin-left:6px">Enter</kbd>Take the lit one</span><span><kbd>B</kbd>Close</span></div></div>`;
-    (document.getElementById('app') || document.body).appendChild(menuEl);
-    const said = menuEl.querySelector('.gun-menu-said'), host = menuEl.querySelector('.gun-menu-cards');
-    let at = 0, slide = 0, froze = false, closing = 0;
-    const isOpen = () => menuEl.classList.contains('on'), locked = () => !!document.pointerLockElement;
-    const light = i => { at = (i + list.length) % list.length; for (const [k, b] of [...cardsEl.children].entries()) b.classList.toggle('at', k === at); };
-    function open() {
-      clearTimeout(closing); said.textContent = ''; mount(host, 'big');
-      light(Math.max(0, list.findIndex(x => x.id === api.choice()))); slide = 0;
-      menuEl.classList.add('on');
-      // stand still while choosing: nothing moves, looks or fires until it is closed
-      try { if (g.player && g.player.alive !== false && g.player.enabled !== false) { g.input.setGameplay(false); froze = true; } } catch { /* fine */ }
-    }
-    function close() {
-      clearTimeout(closing); menuEl.classList.remove('on'); if (cardsEl) { cardsEl.classList.remove('big'); for (const b of cardsEl.children) b.classList.remove('at'); }
-      if (froze) { froze = false; try { if (g.game.state === 'playing' && g.player && g.player.alive !== false && g.player.enabled !== false) g.input.setGameplay(true); } catch { /* fine */ } }
-    }
-    function take(i) {
-      const gun = list[(i + list.length) % list.length]; light(i); api.pick(gun.id); mark();
-      said.textContent = gun.short + ' from your next life';
-      clearTimeout(closing); closing = setTimeout(close, 750);
-    }
-    picked.push(id => { if (isOpen()) take(list.findIndex(x => x.id === id)); });      // a tap or a click on a card, where there is a pointer
-    // every key and click goes to the panel while it is open, before the game sees it
-    window.addEventListener('keydown', e => {
-      const live = !!document.querySelector('.mp-live') && g.game && g.game.state === 'playing';
-      if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
-      if (!isOpen()) { if (live && e.code === 'KeyB' && !e.repeat && g.player && g.player.alive !== false && g.player.enabled !== false) { open(); e.stopImmediatePropagation(); } return; }
-      const i = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'].indexOf(e.code);
-      if (i >= 0) take(i % 3);
-      else if (e.code === 'KeyA' || e.code === 'ArrowLeft') light(at - 1);
-      else if (e.code === 'KeyD' || e.code === 'ArrowRight') light(at + 1);
-      else if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') take(at);
-      else if ((e.code === 'KeyB' && !e.repeat) || e.code === 'Escape') close();
-      else if (e.code === 'KeyP') return;                                                // pause still pauses
-      e.stopImmediatePropagation(); if (e.code !== 'Escape') e.preventDefault();
-    }, true);
-    window.addEventListener('keyup', e => { if (isOpen()) e.stopImmediatePropagation(); }, true);
-    document.addEventListener('mousemove', e => {
-      if (!isOpen() || !locked()) return;
-      slide += e.movementX || 0;
-      if (Math.abs(slide) > 110) { light(at + Math.sign(slide)); slide = 0; }
-    }, true);
-    document.addEventListener('mousedown', e => {
-      if (!isOpen()) return;
-      if (locked()) { take(at); e.stopImmediatePropagation(); e.preventDefault(); }       // captured mouse: the click takes the lit card and never fires
-      else if (!e.target.closest || !e.target.closest('.gun-card')) { e.stopImmediatePropagation(); if (e.target === menuEl) close(); }
-    }, true);
-    menuEl.addEventListener('mouseover', e => { const b = e.target.closest && e.target.closest('.gun-card'); if (b && !locked()) light([...cardsEl.children].indexOf(b)); });
-    // it closes by itself if the player goes down or the game stops being played
-    setInterval(() => { if (isOpen() && (!g.game || g.game.state !== 'playing' || !g.player || g.player.alive === false || g.player.enabled === false)) { froze = false; close(); } }, 150);
-    // the key, in the list of keys at the right of the screen
-    const legend = setInterval(() => { const ui = document.querySelector('.mp-ui'); if (!ui) return; clearInterval(legend); const row = document.createElement('div'); row.className = 'gun-key'; row.innerHTML = '<kbd>B</kbd><b>Next gun</b>'; ui.appendChild(row); }, 300);
-  }
+  /* B no longer chooses the next gun in a match: it opens the bag (web/bag.js), and a player keeps whatever guns they
+     pick up until they go down. The gun to come back with is chosen on the card shown when down (see down above). */
+  const menuEl = null;
 
   /* ------------------------------------------------------------------ choosing a gun: three cards
-     One row of three cards, the same wherever a gun is chosen: the first screen, the card shown when down, and B in a
-     match. Each card shows the gun itself, turning, with its numbers in the corner, and its name underneath. It is one
+     One row of three cards, the same wherever a gun is chosen: the first screen and the card shown when down. Each card shows the gun itself, turning, with its numbers in the corner, and its name underneath. It is one
      set of cards, moved to wherever it is needed.
 
      The turning guns are the real models, drawn by the game's own renderer into a small picture that is copied onto
@@ -860,7 +775,7 @@
           ammoEl.className = 'gun-ammo on'; ring.style.strokeDashoffset = String(119.4 * (1 - Math.min(1, prog))); text.textContent = 'Hold ' + keyName() + '  ·  Restock ammo';
           if (prog >= 1) {
             prog = 0; holding = false; near.taken = Math.round(sec); const i = stations.indexOf(near), row = taken.find(r => r[0] === i); if (row) row[1] = near.taken; else taken.push([i, near.taken]);
-            for (const rig of Object.values(weapon.rigs)) rig.slot.reserve = rig.def.reserve;
+            if (!(window.__SALTLINE_BAG && window.__SALTLINE_BAG.refill())) for (const rig of Object.values(weapon.rigs)) rig.slot.reserve = rig.def.reserve;      // in a match the bag keeps the spare rounds
             try { g.audio.play('reload_magin', { gain: 1, pitch: 0.9 }); g.audio.play('gear_rustle', { gain: 1 }); } catch { /* fine */ }
             text.textContent = 'Ammo restocked'; ring.style.strokeDashoffset = '0'; doneUntil = now + 1400;
           }
@@ -906,7 +821,6 @@
       const setVisible = weapon.setVisible; weapon.setVisible = b => { visible = !!b; if (!b) scopeOff(); return setVisible(b); };
       const reset = weapon.reset; weapon.reset = () => { scopeOff(); return reset(); };
       g.events.on('weapon:switch', scopeOff);
-      try { gunMenu(g); } catch (e) { console.error('[guns] menu: ' + e); }
       scopeSetting(); musicSetting();
       const whenBuilt = setInterval(() => { if (!window.__ready) return; clearInterval(whenBuilt); try { ammoSetup(g); } catch (e) { console.error('[guns] ammo: ' + (e && e.stack || e)); } }, 300);
     },
