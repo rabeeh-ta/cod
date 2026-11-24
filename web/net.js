@@ -526,10 +526,17 @@
       .fe-col > .fe-k:first-child { margin-top: 0; }
 
       /* home: the mark, then the three ways in */
-      .fe-home { max-width: 560px; }
+      .fe-home > .fe-eyebrow, .fe-home > .fe-menu { max-width: 560px; }
       .fe-eyebrow { display: flex; gap: 10px; align-items: center; font: 500 12px/1 var(--f-mono, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--bone-dim, rgba(232,228,218,.64)); }
       .fe-eyebrow .tag { padding: 4px 6px; background: var(--signal, #ffb347); color: var(--ink, #0b0d0f); }
-      .fe-word { margin: 14px 0 30px; font: 900 clamp(72px, 11vw, 148px)/.82 var(--f-display, Impact, sans-serif); letter-spacing: .01em; }
+      /* the mark, and "Latest updates!" beside it (under it where there is no room) */
+      .fe-wordrow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 28px; margin: 14px 0 30px; }
+      .fe-word { margin: 0; font: 900 clamp(72px, 11vw, 148px)/.82 var(--f-display, Impact, sans-serif); letter-spacing: .01em; }
+      .fe-btn.fe-news { display: inline-flex; align-items: center; gap: 10px; border-color: rgba(255,179,71,.5); }
+      .fe-news i { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--signal, #ffb347); }
+      .fe-news.new i { animation: net-pulse 2.4s ease-in-out infinite; }
+      .fe-btn.fe-news:hover:not(:disabled) { border-color: var(--signal, #ffb347); color: var(--signal, #ffb347); }
+      .fe-btn.fe-news:active:not(:disabled) { border-color: var(--signal, #ffb347); color: var(--signal, #ffb347); background: rgba(34,27,16,.9); }
       .fe-menu { display: flex; flex-direction: column; border-top: 1px solid var(--line, rgba(232,228,218,.2)); }
       .fe-item { position: relative; appearance: none; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 16px; width: 100%; text-align: left; color: inherit;
         background: transparent; border: 0; border-bottom: 1px solid var(--line, rgba(232,228,218,.2)); padding: 18px 8px 18px 20px; cursor: pointer;
@@ -719,7 +726,8 @@
         .fe-body { padding: 12px 0; }
         .fe-home { max-width: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); column-gap: 32px; align-items: center; }
         .fe-home .fe-eyebrow { grid-column: 1; grid-row: 1; align-self: end; }
-        .fe-home .fe-word { grid-column: 1; grid-row: 2; align-self: start; margin: 10px 0 0; font-size: clamp(56px, 10vw, 104px); }
+        .fe-home .fe-wordrow { grid-column: 1; grid-row: 2; align-self: start; margin: 10px 0 0; gap: 10px 20px; }
+        .fe-home .fe-word { font-size: clamp(56px, 10vw, 104px); }
         .fe-home .fe-menu { grid-column: 2; grid-row: 1 / span 2; }
         .fe-item { padding: 11px 8px 11px 16px; }
         .fe-item:hover:not(:disabled), .fe-item:focus-visible { padding-left: 22px; }
@@ -737,7 +745,7 @@
         .fe-item, .fe-item::before, .fe-item b, .fe-item i, .fe-mode, .fe-map, .fe-map img, .fe-map::before, .fe-map-tag, .fe-cta, .fe-btn, .fe-name, .fe-team .fe-join-team { transition: none; }
         .fe-map:hover:not(:disabled) img, .fe-map:active:not(:disabled) img { transform: none; }
         .fe-item:hover:not(:disabled) i, .fe-item:focus-visible i { transform: none; }
-        .net-live i, .fe-status.busy::before { animation: none; }
+        .net-live i, .fe-status.busy::before, .fe-news.new i { animation: none; }
       }
 
       .net-talk { position: fixed; z-index: 800; left: var(--gl, 16px); top: calc(max(14px, env(safe-area-inset-top)) + 84px); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
@@ -804,7 +812,7 @@
       <main class="fe-body">
         <section class="fe-screen fe-home" data-s="home" aria-label="Saltline">
           <div class="fe-eyebrow"><span class="tag">B4</span><span>Port Authority Breach Unit · up to 10 a match</span></div>
-          <h1 class="fe-word">SALTLINE</h1>
+          <div class="fe-wordrow"><h1 class="fe-word">SALTLINE</h1><button type="button" class="fe-btn fe-news" data-act="news" aria-haspopup="dialog"><i aria-hidden="true"></i><span>Latest updates!</span></button></div>
           <nav class="fe-menu" aria-label="Play">
             <button type="button" class="fe-item" data-go="quick"><b>Quick play</b><span>Team deathmatch or deathmatch, with whoever is on.</span><em data-net-stat="dm"></em><i aria-hidden="true">&rarr;</i></button>
             <button type="button" class="fe-item" data-go="private"><b>Private match</b><span>Make a room, share the code, play with friends.</span><em data-net-stat="rooms"></em><i aria-hidden="true">&rarr;</i></button>
@@ -916,10 +924,10 @@
       if (fill) load.lastChild.firstChild.style.width = fill.style.width;
       if (window.__ready || window.__fatal) { clearInterval(sceneUp); document.documentElement.classList.add('net-scene'); }
     }, 80);
-    /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
-       whoever goes looking. Add a new entry at the top with each release. */
+    /* The update log: what changed in the game and when, newest first. It opens from "Latest updates!" beside the name on
+       the home screen, and sits folded at the very bottom of Settings too. Add a new entry at the top with each release. */
     const UPDATES = [
-      ['24 Nov 2026', ['Guns drop when a player goes down, and lie there for a minute. Walk up to one and hold G to swap it for what is in your hands: you can carry two guns, two of the same gun, or a gun and the knife, and the gun keeps its rounds (two of a kind share their spare). B opens your bag at the bottom right: drag (or the arrow keys) to change which is 1 and which is 2. The gun to come back with is chosen on the card shown when you are down', 'Kills and deaths stay right all evening: a kill on a player whose connection drops and comes back still counts, a reload (or a page the browser reloads by itself, or a map change) brings back your kills for the round, and a new round starts at zero even for anyone who was in the menus when it began', 'Team deathmatch: kills stay with the team they were made for. Change sides and your old team keeps them, as a row of their own', 'The kill feed says when someone is back, reloaded, or joined the other team', 'Ctrl+R no longer reloads the page in the middle of play (Ctrl is a crouch key); pause first to reload']],
+      ['24 Nov 2026', ['A fifth map: Area 51, a fenced motor pool in the open desert at noon. Every flat roof can be walked on: steel stairs climb the barracks and the east wing, and the lower roofs beside them are there to drop onto. Trucks, containers, a turning radar, and canopies and a camo net that move in the wind', 'The first time you come into a match, seven seconds over the whole map with its name and the mode. Press Space twice (or tap twice) to skip it', 'Latest updates! beside the name on the first screen opens this list', 'Guns drop when a player goes down, and lie there for a minute. Walk up to one and hold G to swap it for what is in your hands: you can carry two guns, two of the same gun, or a gun and the knife, and the gun keeps its rounds (two of a kind share their spare). B opens your bag at the bottom right: drag (or the arrow keys) to change which is 1 and which is 2. The gun to come back with is chosen on the card shown when you are down', 'Kills and deaths stay right all evening: a kill on a player whose connection drops and comes back still counts, a reload (or a page the browser reloads by itself, or a map change) brings back your kills for the round, and a new round starts at zero even for anyone who was in the menus when it began', 'Team deathmatch: kills stay with the team they were made for. Change sides and your old team keeps them, as a row of their own', 'The kill feed says when someone is back, reloaded, or joined the other team', 'Ctrl+R no longer reloads the page in the middle of play (Ctrl is a crouch key); pause first to reload']],
       ['20 Nov 2026', ['Grenades: while you hold F, red dots show where it will fly up to the first thing it hits, a ring marks that spot and a small mark shows where it ends up; the two marks show through walls. Aim (right click) while holding it puts the grenade back', 'Grenades bounce less, and fly the same at any frame rate', 'Alpine: a grenade thrown high no longer ends up on top of a roof', 'A grenade thrown in at a window stays on that floor: near the ceiling it used to jump to the floor above', 'Deathmatch: choose your colour on the Quick play screen, in the room lobby and on the pause screen. A colour someone else has is crossed out and says who has it; whoever was in the room first keeps it', 'Settings → Peek: Hold, Mixed or Toggle. Crouch gets Mixed too: a tap toggles, a press held half a second works as hold', 'Team play: a player who leaves and comes back is one row on the board, and every round starts with nobody left over', 'Teammates\' footsteps are much quieter', 'The sniper scope comes up faster: 0.22 s, down from 0.34', 'Back works again on the team screen after leaving a match', 'Alpine: walk through the bushes; the garden fence behind the corner house on the north-west, the bush beside it and the back door of the ruin on the street are gone']],
       ['19 Nov 2026', ['A fourth map: Maram, a walled desert town under rocky hills in the morning sun, with two sites, a long road and tunnels', 'The whole map in the top right corner of the pause screen: where you are and the way you face, your team in Team deathmatch, the ammo sets, and anyone who has just fired', 'Settings → Crouch: hold the key, or press it once to go down and again to stand', 'The mouse wheel changes weapon while you sprint', 'Maram: smooth over slopes and stairs, the gun included', 'Typed radio (T) is gone; voice chat (V) stays']],
       ['18 Nov 2026', ['Vaulting: jump while running at a low wall, a barrier, a crate or a window sill and you go over it, through the window, or up onto it when it is higher than your chest. It keeps your speed, finds a window without lining up on it exactly, and puts your hands on the ledge; other players see you climb', 'Peeking (Q / E) now shows your soldier as far out as you can see: no more seeing round a corner while staying hidden', 'Reloading the page takes you straight back into the match you were in', 'Through the sniper scope Z steps the zoom (2x, 4x, 6x, 10x), so it works while you move', 'No fall damage from any drop under about 5 m: jump or vault out of an upstairs window', 'Alpine: two houses on the street can be entered, with a stair up to a room with a wide window; a stair to a veranda in the ruin by the well sign; a doorway into the stone ruin from the alley; the stone blocks and crates stand 1.35 to 1.95 m and are spread across the lanes; upstairs windows can be vaulted out of', 'A room\'s map can be changed from its lobby: everyone in the room moves to the new map together', 'Settings at the top of every menu screen', 'The pause screen of a room shows its code and a Copy link button of their own', 'Touch screens: move, resize and fade every button (Settings, Touch controls)', 'Phones held sideways: the first screen fits without scrolling']],
@@ -940,6 +948,7 @@
       ['13 Nov 2026', ['A new round restarts every player: position, health and ammo', 'Louder voice chat with its own volume setting, and louder enemy footsteps']],
     ];
     const CREDITS = 'Shotgun: "Simple old shotgun" by SuperMopsek (CC BY 4.0). Sniper rifle: "SV-98 | Contract Wars" by xlisov (CC BY-NC 4.0). Ammunition: "Ammo Set" by Guy in a Poncho (CC BY 4.0). All from sketchfab.com. Alpine: wall, roof and ground textures, and the way the grass is drawn, from Valle Morta by Leonxlnx (MIT); the valley is "Alps Field" by Andreas Mischok, polyhaven.com (CC0). Maram: the town is a model by vrchris, sketchfab.com (CC BY 4.0); the hills and sky are "Klippad Sunrise 2" by Greg Zaal, polyhaven.com (CC0).';
+    const logHtml = () => UPDATES.map(([when, items]) => `<h4>${when}</h4><ul>${items.map(t => `<li>${t}</li>`).join('')}</ul>`).join('') + '<h4>Press F3 in a match</h4><ul><li>Shows frames per second and what the game is drawing, for reporting slow machines</li></ul>';
     const logCss = document.createElement('style');
     logCss.textContent = `.net-log { margin-top: 26px; border-top: 1px solid var(--line, rgba(232,228,218,.2)); padding-top: 12px; }
       .net-log summary { cursor: pointer; font: 500 11px/1 var(--f-mono, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--bone-faint, rgba(232,228,218,.4)); list-style: none; }
@@ -952,10 +961,56 @@
     const logWait = setInterval(() => {
       const pane = document.querySelector('[data-pane="settings"]'); if (!pane) return; clearInterval(logWait);
       const d = document.createElement('details'); d.className = 'net-log';
-      d.innerHTML = '<summary>Update log</summary>' + UPDATES.map(([when, items]) => `<h4>${when}</h4><ul>${items.map(t => `<li>${t}</li>`).join('')}</ul>`).join('') + '<h4>Press F3 in a match</h4><ul><li>Shows frames per second and what the game is drawing, for reporting slow machines</li></ul>';
+      d.innerHTML = '<summary>Update log</summary>' + logHtml();
       pane.appendChild(d);
       const keys = document.querySelector('[data-pane="controls"]'); if (keys) { const c = document.createElement('p'); c.className = 'panel-note'; c.textContent = CREDITS; keys.appendChild(c); }
     }, 500);
+    /* "Latest updates!" beside the name on the home screen: the same log in a sheet of its own, drawn like the game's own
+       Settings panel (on the right, opening without animation as that one does), over a dimmed menu. Close, Esc or a click
+       on the menu closes it, and the focus goes back to the button. The button's dot pulses until this browser has opened
+       the newest entry. */
+    const news = (() => {
+      const btn = gate.querySelector('[data-act="news"]'), SEEN = 'saltline.updatesSeen', sig = UPDATES[0][0] + '/' + UPDATES[0][1].length;
+      const mark = () => btn.classList.toggle('new', store.get(SEEN) !== sig);
+      mark();
+      const css = document.createElement('style');
+      css.textContent = `.net-news { box-sizing: border-box; position: fixed; inset: 0 0 0 auto; width: min(440px, 100vw); height: 100%; max-width: 100vw; max-height: none; margin: 0; overflow: hidden;
+          flex-direction: column; padding: calc(10px + env(safe-area-inset-top, 0px)) 0 env(safe-area-inset-bottom, 0px); border: 0; border-left: 1px solid var(--line, rgba(232,228,218,.2));
+          background: rgba(11,13,15,.95); color: var(--bone, #e8e4da); font-family: var(--f-label, 'Barlow Condensed', sans-serif); }
+        .net-news[open] { display: flex; }
+        .net-news::backdrop { background: rgba(5,6,7,.5); }
+        .net-news:focus { outline: none; }
+        .net-news-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px max(20px, env(safe-area-inset-right, 0px)) 0 22px; border-bottom: 1px solid var(--line, rgba(232,228,218,.2)); }
+        .net-news-h h2 { margin: 0 0 -1px; padding: 14px 0 12px; border-bottom: 3px solid var(--signal, #ffb347); font: 600 15px/1 var(--f-label, sans-serif); letter-spacing: .22em; text-transform: uppercase; color: var(--bone, #e8e4da); }
+        .net-news-h .fe-btn { padding: 10px 14px; font-size: 13px; }
+        .net-news-b { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 6px max(20px, env(safe-area-inset-right, 0px)) 24px 22px; -webkit-overflow-scrolling: touch; }
+        .net-news-b h4 { margin: 20px 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line, rgba(232,228,218,.2)); font: 600 11px/1 var(--f-label, sans-serif); letter-spacing: .26em; text-transform: uppercase; color: var(--steel, #8d9aa3); }
+        .net-news-b h4:first-child { color: var(--signal, #ffb347); }
+        .net-news-b ul { margin: 0; padding-left: 18px; }
+        .net-news-b li { margin: 6px 0; font-size: 16px; line-height: 1.4; color: var(--bone-dim, rgba(232,228,218,.64)); }
+        .net-news-b li::marker { color: var(--bone-faint, rgba(232,228,218,.3)); }
+        .net-news-b h4:first-child + ul li { color: var(--bone, #e8e4da); }`;
+      document.head.appendChild(css);
+      const d = document.createElement('dialog'); d.className = 'net-news'; d.setAttribute('aria-labelledby', 'net-news-h');
+      d.innerHTML = `<header class="net-news-h"><h2 id="net-news-h">Latest updates</h2><button type="button" class="fe-btn" data-news="close">Close</button></header><div class="net-news-b">${logHtml()}</div>`;
+      document.body.appendChild(d);
+      const body = d.querySelector('.net-news-b');
+      const close = () => { if (d.open) d.close(); };
+      d.addEventListener('close', () => { if (!gate.hidden) btn.focus({ preventScroll: true }); });
+      d.addEventListener('cancel', ev => { ev.preventDefault(); close(); });
+      d.addEventListener('click', ev => {
+        if (ev.target.closest('[data-news="close"]')) { close(); return; }
+        const r = d.getBoundingClientRect();   // a click on the dimmed menu lands on the dialog itself, outside its box
+        if (ev.target === d && (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom)) close();
+      });
+      // Esc closes the sheet and nothing else (not a screen back, not the game)
+      addEventListener('keydown', ev => { if (d.open && ev.key === 'Escape') { ev.preventDefault(); ev.stopImmediatePropagation(); close(); } }, true);
+      for (const t of ['keydown', 'keyup']) d.addEventListener(t, ev => { if (ev.key !== 'Escape') ev.stopPropagation(); });   // keep keys out of the game
+      new MutationObserver(() => { if (gate.hidden) close(); }).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
+      return {
+        open() { if (d.open || gate.hidden) return; body.scrollTop = 0; d.showModal(); store.set(SEEN, sig); mark(); },
+      };
+    })();
     /* F3: a small readout of how the game is running on this machine (for players to send when it is slow) */
     let perfEl = null, perfT = [];
     window.addEventListener('keydown', e => {
@@ -1353,6 +1408,7 @@
       else if (a === 'map-yes') changeMap(pick.askMap);
       else if (a === 'map-no') { pick.askMap = ''; $('[data-fe="map-ask"]').hidden = true; paint(); }
       else if (a === 'settings') openSettings();
+      else if (a === 'news') news.open();
     });
     // the room's invite link to the clipboard; the button says so for a moment. Where the clipboard is refused, the button
     // shows the link itself so it can be read out
