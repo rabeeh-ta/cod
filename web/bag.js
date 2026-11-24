@@ -639,7 +639,7 @@
     }
     // the take, if its answer is slow: ask for the list (the answer settles it); in the end, give up on it
     const p = bag.pending;
-    if (p && !p.asked && now - p.t0 > 1500) { p.asked = true; if (room) room.askDrops(); }
+    if (p && !p.asked && now - p.t0 > 2500) { p.asked = true; if (room) room.askDrops(); }     // asked after the take on the same connection, so the answer comes after it
     if (p && now - p.t0 > SETTLE) settle(false);
     // what the pick-up would take, and the hold
     findTarget();

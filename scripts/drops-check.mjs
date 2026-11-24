@@ -377,7 +377,7 @@ async function deathMidSwap() {
     const rd = await T.eval('__SALTLINE_MATCH.round');
     const before = carried(await T.state()) + onGround(await g.list(), rd);
     // the take is held back a moment, as a slow connection would
-    await T.eval(`(async () => { const r = await window.__SALTLINE_ROOM(); if (!r.__take) { r.__take = r.take; } r.take = (id, put) => { setTimeout(() => r.__take(id, put), 1500); return true; }; return 1; })()`);
+    await T.eval(`(async () => { const r = await window.__SALTLINE_ROOM(); if (!r.__take) { r.__take = r.take; } r.take = (id, put) => { setTimeout(() => r.__take(id, put), 900); return true; }; return 1; })()`);
     await T.until(`window.__SALTLINE_BAG.state().target === ${JSON.stringify(it.id)}`, 3000);
     await T.key('KeyG', 700);
     const pend = (await T.state()).pending;
