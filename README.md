@@ -24,6 +24,7 @@ Hold **F** to cook a grenade: red dots show where it would fly if let go now, up
 npm install
 npm run dev        # serves on http://localhost:8787 (add -- --port 8799 if 8787 is taken)
 npm test           # protocol smoke test against the dev server (pass a URL to test another port or a deployment)
+node scripts/score-check.mjs   # kills, deaths and team scores over five rounds with a real game tab (needs the dev server and Chrome)
 ```
 
 ## Deploy
@@ -72,6 +73,7 @@ See [CLAUDE.md](CLAUDE.md) for the Cloudflare stack.
 | Gun models | `scripts/gun-assets.mjs` | Turns a downloaded `.glb` into the small files in `web/guns/` (run once per model, on macOS) |
 | Gun hooks | `scripts/gun-hooks.mjs` | The patches that let more guns into the game and change what a respawn does; the import runs them |
 | Performance hooks | `scripts/perf-hooks.mjs`, `web/perf.js` | What keeps the game smooth on modest hardware, learnt from Valle Morta: no multisampling at Medium and High (the game's own smoothing pass does the edges), the mirror pass for puddles only at Ultra, the world drawn at the window's size rather than the screen's pixel density below Ultra, a warm-up during loading that prepares every shader and picture so first shots, grenades and players do not freeze the game, and older graphics cards starting on Medium; the import runs the hooks |
+| Score hooks | `scripts/score-hooks.mjs`, `scripts/score-check.mjs` | Kills and deaths stay right across dropped connections, reloads, rounds and changes of side; the import runs them last, and the check plays five rounds against a real game tab |
 
 ## Credits
 

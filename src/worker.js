@@ -213,10 +213,15 @@ export class Room extends DurableObject {
     if (!code) return refuse(4004, "not_found");
     if (!PEER_RE.test(peer) || !UID_RE.test(by)) return refuse(4000, "bad_request");
 
-    // a reconnect from the same tab reuses its peer id: retire the stale socket quietly
+    // a reconnect from the same tab reuses its peer id: retire the stale socket quietly. To everyone else it is the same
+    // player carrying on, so they are not told about a join (that made their games forget what they had already seen
+    // from this player, and a kill reported in the first message after it was never counted), and the stored state
+    // stays until the player's own full state arrives
+    let kept = null;
     for (const ws of this.sockets()) {
       const a = ws.deserializeAttachment();
       if (a.peer === peer) {
+        kept = a.p || {};
         ws.serializeAttachment({ ...a, dead: true });
         try { ws.close(4009, "replaced"); } catch { /* already gone */ }
       }
@@ -224,13 +229,13 @@ export class Room extends DurableObject {
     const others = this.sockets();
     if (others.length >= MAX_PLAYERS) return refuse(4001, "full");
 
-    server.serializeAttachment({ peer, by, p: {} });
+    server.serializeAttachment({ peer, by, p: kept || {} });
     const map = (await this.ctx.storage.get("map")) || MAPS[0];
     server.send(JSON.stringify({
       t: "hello", you: peer, code, max: MAX_PLAYERS, now: Date.now(), map,
       peers: others.map((ws) => { const a = ws.deserializeAttachment(); return { peer: a.peer, by: a.by, p: a.p }; }),
     }));
-    this.broadcast({ t: "join", peer, by }, server);
+    if (!kept) this.broadcast({ t: "join", peer, by }, server);
     this.report(others.length + 1);
     return done();
   }

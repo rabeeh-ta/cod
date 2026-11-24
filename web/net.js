@@ -46,7 +46,30 @@
 
   let uid = store.get('saltline.uid');
   if (!uid || !/^[A-Za-z0-9_-]{6,40}$/.test(uid)) { uid = 'u-' + rnd(16); store.set('saltline.uid', uid); }
-  const peerId = rnd(10); // per tab; reused across reconnects so other players don't see a new person
+  /* The player id of this tab. It is kept for the tab (sessionStorage), so a reload, a map change or a browser that
+     reloads a page in the background brings back the same player: the others carry on counting what they had seen
+     from them, and the game gives back this round's kills (scripts/score-hooks.mjs). A duplicated tab copies
+     sessionStorage, so before using a kept id the page asks the other tabs (BroadcastChannel) whether one already
+     has it, and takes a new id if so. Every tab answers for its own id. */
+  let peerId = null;
+  try { const kept = sessionStorage.getItem('saltline.peer'); if (kept && /^[a-z0-9]{10}$/.test(kept)) peerId = kept; } catch { /* private mode */ }
+  const keptPeer = !!peerId;
+  if (!peerId) peerId = rnd(10);
+  const keepPeer = () => { try { sessionStorage.setItem('saltline.peer', peerId); } catch { /* this load only */ } };
+  keepPeer();
+  const peerReady = new Promise(done => {
+    let bc = null;
+    try { bc = new BroadcastChannel('saltline.peer'); } catch { done(); return; }
+    let t = 0;
+    bc.onmessage = e => {
+      const m = e.data || {};
+      if (m.q && m.q === peerId) bc.postMessage({ taken: m.q });
+      else if (t && m.taken && m.taken === peerId) { peerId = rnd(10); keepPeer(); clearTimeout(t); t = 0; done(); }
+    };
+    if (!keptPeer) { done(); return; }
+    bc.postMessage({ q: peerId });
+    t = setTimeout(() => { t = 0; done(); }, 250);
+  });
   const quickTry = +(new URLSearchParams(location.search).get('try') || 1); // read before the URL is tidied
 
   /* ------------------------------------------------------------------ room: the presence channel */
@@ -118,7 +141,8 @@
         if (typeof m.map === 'string') hooks.onMap(m.map, '', true);
         notify(true);
       } else if (m.t === 'join') {
-        peers.set(m.peer, peerOf(m.peer, m.by, {}));
+        // a player already on the list keeps what we know of them (an older server announced every reconnect as a join)
+        peers.set(m.peer, peerOf(m.peer, m.by, peers.has(m.peer) ? peers.get(m.peer).presence : {}));
         hooks.onJoin(m.peer);
         notify();
       } else if (m.t === 'leave') {
@@ -138,7 +162,7 @@
       }
     }
 
-    connect();
+    peerReady.then(() => { me = { ...me, peer: peerId }; connect(); }); // the id is settled first (a duplicated tab takes a new one)
 
     return {
       code,
@@ -862,6 +886,7 @@
     /* The update log: what changed in the game and when, newest first. It sits folded at the very bottom of Settings, for
        whoever goes looking. Add a new entry at the top with each release. */
     const UPDATES = [
+      ['24 Nov 2026', ['Kills and deaths stay right all evening: a kill on a player whose connection drops and comes back still counts, a reload (or a page the browser reloads by itself, or a map change) brings back your kills for the round, and a new round starts at zero even for anyone who was in the menus when it began', 'Team deathmatch: kills stay with the team they were made for. Change sides and your old team keeps them, as a row of their own', 'The kill feed says when someone is back, reloaded, or joined the other team', 'Ctrl+R no longer reloads the page in the middle of play (Ctrl is a crouch key); pause first to reload']],
       ['20 Nov 2026', ['Grenades: while you hold F, red dots show where it will fly up to the first thing it hits, a ring marks that spot and a small mark shows where it ends up; the two marks show through walls. Aim (right click) while holding it puts the grenade back', 'Grenades bounce less, and fly the same at any frame rate', 'Alpine: a grenade thrown high no longer ends up on top of a roof', 'A grenade thrown in at a window stays on that floor: near the ceiling it used to jump to the floor above', 'Deathmatch: choose your colour on the Quick play screen, in the room lobby and on the pause screen. A colour someone else has is crossed out and says who has it; whoever was in the room first keeps it', 'Settings → Peek: Hold, Mixed or Toggle. Crouch gets Mixed too: a tap toggles, a press held half a second works as hold', 'Team play: a player who leaves and comes back is one row on the board, and every round starts with nobody left over', 'Teammates\' footsteps are much quieter', 'The sniper scope comes up faster: 0.22 s, down from 0.34', 'Back works again on the team screen after leaving a match', 'Alpine: walk through the bushes; the garden fence behind the corner house on the north-west, the bush beside it and the back door of the ruin on the street are gone']],
       ['19 Nov 2026', ['A fourth map: Maram, a walled desert town under rocky hills in the morning sun, with two sites, a long road and tunnels', 'The whole map in the top right corner of the pause screen: where you are and the way you face, your team in Team deathmatch, the ammo sets, and anyone who has just fired', 'Settings → Crouch: hold the key, or press it once to go down and again to stand', 'The mouse wheel changes weapon while you sprint', 'Maram: smooth over slopes and stairs, the gun included', 'Typed radio (T) is gone; voice chat (V) stays']],
       ['18 Nov 2026', ['Vaulting: jump while running at a low wall, a barrier, a crate or a window sill and you go over it, through the window, or up onto it when it is higher than your chest. It keeps your speed, finds a window without lining up on it exactly, and puts your hands on the ledge; other players see you climb', 'Peeking (Q / E) now shows your soldier as far out as you can see: no more seeing round a corner while staying hidden', 'Reloading the page takes you straight back into the match you were in', 'Through the sniper scope Z steps the zoom (2x, 4x, 6x, 10x), so it works while you move', 'No fall damage from any drop under about 5 m: jump or vault out of an upstairs window', 'Alpine: two houses on the street can be entered, with a stair up to a room with a wide window; a stair to a veranda in the ruin by the well sign; a doorway into the stone ruin from the alley; the stone blocks and crates stand 1.35 to 1.95 m and are spread across the lanes; upstairs windows can be vaulted out of', 'A room\'s map can be changed from its lobby: everyone in the room moves to the new map together', 'Settings at the top of every menu screen', 'The pause screen of a room shows its code and a Copy link button of their own', 'Touch screens: move, resize and fade every button (Settings, Touch controls)', 'Phones held sideways: the first screen fits without scrolling']],
@@ -994,7 +1019,8 @@
       return room.peers().map(p => {
         const pr = p.presence || {}, me = !!p.sameTab;
         const n = typeof pr.n === 'string' && pr.n.trim() ? pr.n.trim().slice(0, 16) : me && nameIn.value.trim() ? nameIn.value.trim().slice(0, 16) : 'Breacher';
-        return { me, n, m: pr.m === 'dm' || pr.m === 'tdm' || pr.m === 'solo' ? pr.m : '', tm: pr.tm === 0 || pr.tm === 1 ? pr.tm : -1, k: pr.rd === roundNo() ? Math.max(0, pr.k | 0) : 0, c: typeof pr.c === 'string' && /^#[0-9a-f]{6}$/i.test(pr.c) ? pr.c : '' };
+        return { me, n, m: pr.m === 'dm' || pr.m === 'tdm' || pr.m === 'solo' ? pr.m : '', tm: pr.tm === 0 || pr.tm === 1 ? pr.tm : -1, k: pr.rd === roundNo() ? Math.max(0, pr.k | 0) : 0, c: typeof pr.c === 'string' && /^#[0-9a-f]{6}$/i.test(pr.c) ? pr.c : '',
+          ts: pr.rd === roundNo() && Array.isArray(pr.ts) ? [Math.max(0, pr.ts[0] | 0), Math.max(0, pr.ts[1] | 0)] : null };   // the team scores as that player's game counts them
       });
     }
     const TEAMS = [{ name: 'Red', css: '#ff4b3e' }, { name: 'Blue', css: '#3f8cff' }];   // the same as the game's (scripts/gun-hooks.mjs, 16)
@@ -1064,19 +1090,19 @@
     }
 
     // one team: its name in its colour, its kills, who is on it, and the button to join it
-    function teamBox(host, title, css, list, tdm, team, ok) {
+    function teamBox(host, title, css, list, tdm, team, ok, total) {
       const d = document.createElement('div'); d.className = 'fe-team' + (list.some(e => e.me) ? ' mine' : '');
       if (css) d.style.setProperty('--team', css);
       const h = document.createElement('div'); h.className = 'fe-team-h';
       const b = document.createElement('b'); b.textContent = title; if (css) b.style.color = css;
-      const s = document.createElement('span'); const kills = list.reduce((a, e) => a + e.k, 0);
+      const s = document.createElement('span'); const kills = Math.max(list.reduce((a, e) => a + e.k, 0), total || 0);   // kills a player made before changing team stay with the team they made them for
       s.textContent = tdm ? kills + (kills === 1 ? ' kill' : ' kills') : list.length + (list.length === 1 ? ' player' : ' players');
       h.append(b, s); d.append(h, roster(list, css));
       if (team === 0 || team === 1) { const j = document.createElement('button'); j.type = 'button'; j.className = 'fe-join-team'; j.dataset.team = String(team); j.textContent = 'Join ' + title; j.disabled = busy || !ok; d.appendChild(j); }
       host.appendChild(d);
     }
     function teamBoxes(host, all, ok) {
-      for (const i of [0, 1]) teamBox(host, TEAMS[i].name, TEAMS[i].css, all.filter(e => e.m === 'tdm' && e.tm === i), true, i, ok);
+      for (const i of [0, 1]) teamBox(host, TEAMS[i].name, TEAMS[i].css, all.filter(e => e.m === 'tdm' && e.tm === i), true, i, ok, Math.max(0, ...all.filter(e => e.m === 'tdm' && e.ts).map(e => e.ts[i])));
     }
     // quick play, Team deathmatch: the open match is found; now the player picks a side
     let pickSig = '';

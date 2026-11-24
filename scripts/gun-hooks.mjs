@@ -132,6 +132,7 @@ export function applyGunHooks(html) {
   //     back (matched by player id, or by name when the id is new: another device; on either side, so one person is
   //     always one row), and otherwise shown as its own row, "(left)". The team scores are then counted from the rows.
   //     Every kept score goes at the end of the round (roundOver empties the bank), so a new round starts with no one.
+  //     (A change of side, and the team a kept score may join, are now handled by scripts/score-hooks.mjs, part 4.)
   swap(`if (mp.mode === 'tdm' && R.tm >= 0 && R.k > 0) bankPut(R.peer, R.tm, R.k);`,
     `if (mp.mode === 'tdm' && R.tm >= 0 && R.k > 0) bankPut(R.peer, R.tm, R.k, R.id, R.name, R.d);`, 'a leaving player is kept');
   swap(`    function bankPut(peer, tm, k) {

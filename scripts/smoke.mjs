@@ -67,6 +67,17 @@ ok(!more[0].msgs.some(m => m.t === 'join' && m.peer === x.peer), 'refused player
 const a2 = client(code, 1); await a2.ready; const ha2 = await a2.hello(); await sleep(200);
 ok(ha2 && ha2.peers.length === 9, 'reconnect with same peer id is accepted while room is full');
 ok(!b.msgs.some(m => m.t === 'leave' && m.peer === a.peer), 'no leave is announced for a replaced socket');
+ok(!b.msgs.some(m => m.t === 'join' && m.peer === a.peer), 'no join is announced for a replaced socket (a reconnect is the same player)');
+ok(ha2 && !ha2.peers.some(p => p.peer === a.peer), 'the replaced socket is not in its own hello');
+{ // a late joiner still sees the player's state from before the reconnect
+  const rest = more.slice(0, 7);
+  const late = client(code, 2); // b's peer id: b is still in, so this is b reconnecting; the room stays at 10
+  await late.ready; const hl = await late.hello();
+  const pa = hl && hl.peers.find(p => p.peer === a.peer);
+  ok(pa && pa.p && pa.p.n === 'alpha', 'a reconnected player keeps their stored state until they send a new one');
+  ok(!rest.some(c => c.msgs.some(m => m.t === 'join' && m.peer === late.peer)), 'and that reconnect is not announced either');
+  b.ws = late.ws; b.msgs = late.msgs; // b carries on as the new socket
+}
 
 b.ws.close(1000); await sleep(300);
 ok(a2.msgs.some(m => m.t === 'leave' && m.peer === b.peer), 'leave is announced when a player disconnects');

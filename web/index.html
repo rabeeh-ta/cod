@@ -6845,16 +6845,33 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     addEventListener('mouseup', ev => { const code = auxCode(ev); if (auxBound(code)) { ev.preventDefault(); dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true, cancelable: true })); } }, true);
     addEventListener('auxclick', ev => { if (auxBound(auxCode(ev))) ev.preventDefault(); }, true);
 
-    const stats = { dm: { kills: 0, deaths: 0 }, tdm: { kills: 0, deaths: 0, team: -1 } };
+    const stats = { dm: { kills: 0, deaths: 0 }, tdm: { kills: 0, deaths: 0, team: -1, per: [[0, 0], [0, 0]] }, rd: -1 }; // per: kills and deaths made for each team this round; rd: the round they were made in
     const mp = {
       live: false, joining: false, mode: null, team: -1, alive: true, respawnAt: 0, protectUntil: 0, joinedAt: 0,
       lastAttacker: null, blastOwner: null, applyingRemote: false, replayPeer: '', lit: new Map(),
-      shSeq: 0, shot: null, hSeq: 0, hits: [], dSeq: 0, dl: [], bSeq: 0, bx: [], bank: {},
+      seen: new Map(), shSeq: 0, shot: null, hSeq: 0, hits: [], dSeq: 0, dl: [], bSeq: 0, bx: [], bank: {},
       dirty: true, sendT: 0, away: false, obj: '', tally: '', board: false, boardPin: false, hudT: 0, round: 0, last: {}, final: null, warned: 0, frame: 0,
     };
     const net = { sent: 0, err: '', db: null, perm: '', room: null, user: null, perms: null, ch: null, named: false, myPeer: null, myId: null, prof: {}, state: 'connecting', why: '', lobbyPeers: [] };
     const remotes = new Map();
     const S = () => stats[mp.mode] || stats.dm;
+    /* ---- scores (scripts/score-hooks.mjs) */
+    const LOAD_ID = Math.random().toString(36).slice(2, 10); // this page load: a reload is told apart from a dropped connection
+    const nextSeq = s => Math.max(s + 1, Date.now()); // event numbers grow with the clock, so a reloaded page's are newer than anything sent before it
+    function tdmPer() { const p = stats.tdm.per.map(x => x.slice()); if (stats.tdm.team === 0 || stats.tdm.team === 1) p[stats.tdm.team] = [stats.tdm.kills, stats.tdm.deaths]; return p; }
+    const SCORE_KEY = 'saltline.score';
+    let scoreSig = '';
+    function keepScore() { // this tab's counts, so a reload gives them back (sessionStorage: this tab only)
+      if (!mp.live || !net.room || !net.myPeer) return;
+      const s = S(), sig = JSON.stringify({ code: net.room.code || '', peer: net.myPeer, rd: mp.round, m: mp.mode, tm: mp.team, k: s.kills, d: s.deaths, per: mp.mode === 'tdm' ? tdmPer() : null });
+      if (sig === scoreSig) return; scoreSig = sig;
+      try { sessionStorage.setItem(SCORE_KEY, sig); } catch { /* this page only */ }
+    }
+    function keptScore(mode) { // the counts this tab had in this room this round, as the same player; otherwise null
+      let o = null; try { o = JSON.parse(sessionStorage.getItem(SCORE_KEY) || 'null'); } catch { o = null; }
+      if (!o || !net.room || o.code !== net.room.code || o.peer !== net.myPeer || o.rd !== roundNow() || o.m !== mode) return null;
+      return o;
+    }
 
     /* ------------------------------------------------------------------ names and colours */
     function profileOf(id) { return id && net.prof[id] || null; }
@@ -7359,6 +7376,9 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     function dropRemote(R, left) {
       avatars.remove(R.av.group); R.tag.remove(); remotes.delete(R.peer);
       if (left && mp.live) {
+        mp.seen.set(R.peer, { sh: R.shSeq, h: R.hSeq, dl: R.dSeq, bx: R.bSeq, g: R.gSeq, ld: R.ld || '', tm: R.tm, t: performance.now() });
+        if (mp.seen.size > 40) mp.seen.delete(mp.seen.keys().next().value);
+        if (mp.mode === 'tdm' && R.kt) for (const i of [0, 1]) if (i !== R.tm && R.kt[i][0] > 0) bankPut(R.peer + '#' + i, i, R.kt[i][0], R.id, R.name, R.kt[i][1]); // kills made for the side they left earlier
         if (mp.mode === 'tdm' && R.tm >= 0 && R.k > 0) bankPut(R.peer, R.tm, R.k, R.id, R.name, R.d);
         if (performance.now() - mp.joinedAt > 1500) feed('left', { name: R.name || 'Someone', css: R.css || '#e8e4da' });
       }
@@ -7409,7 +7429,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     };
     // kind: 0 rifle, 1 knife, 2 frag
     function sendHit(R, amount, weak, kind) {
-      mp.hits.push([++mp.hSeq, R.peer, clamp(Math.round(amount), 1, 150), weak ? 1 : 0, kind | 0]);
+      mp.hits.push([(mp.hSeq = nextSeq(mp.hSeq)), R.peer, clamp(Math.round(amount), 1, 150), weak ? 1 : 0, kind | 0]);
       while (mp.hits.length > 12) mp.hits.shift();
       mp.dirty = true;
     }
@@ -7419,7 +7439,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       if (mp.live) {
         if (mp.protectUntil) { mp.protectUntil = 0; P.invulnerable = false; }
         const e = r && r.point ? r.point : _a.copy(o).addScaledVector(d, Math.min(opts && opts.range || 300, 140));
-        mp.shot = [++mp.shSeq, r2(e.x), r2(e.y), r2(e.z), window.__SALTLINE_GUNS.code(G.weapon.current)];
+        mp.shot = [(mp.shSeq = nextSeq(mp.shSeq)), r2(e.x), r2(e.y), r2(e.z), window.__SALTLINE_GUNS.code(G.weapon.current)];
         mp.dirty = true;
       }
       return r;
@@ -7451,7 +7471,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       if (la && now - la.t < 5000) { killer = la.peer; cause = la.w; hs = la.hs ? 1 : 0; }
       else if (mp.blastOwner && now < mp.blastOwner.until) { cause = mp.blastOwner.frag ? 'frag' : 'barrel'; if (mp.blastOwner.peer !== net.myPeer) killer = mp.blastOwner.peer; }
       mp.lastAttacker = null;
-      mp.dl.push([++mp.dSeq, killer, cause, hs]); while (mp.dl.length > 4) mp.dl.shift();
+      mp.dl.push([(mp.dSeq = nextSeq(mp.dSeq)), killer, cause, hs]); while (mp.dl.length > 4) mp.dl.shift();
       P.invulnerable = true; P.enabled = false;
       try { G.input.setGameplay(false); } catch { /* fine */ }
       try { G.weapon.setVisible(false); } catch { /* fine */ }
@@ -7520,7 +7540,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       const owner = it && mp.lit.get(it) || chain || net.myPeer || '';
       if (it) mp.lit.delete(it);
       mp.blastOwner = { peer: owner, until: now + 1500 };
-      mp.bx.push([++mp.bSeq, Math.round(e.pos.x * 10) / 10, Math.round(e.pos.z * 10) / 10, owner]); while (mp.bx.length > 8) mp.bx.shift();
+      mp.bx.push([(mp.bSeq = nextSeq(mp.bSeq)), Math.round(e.pos.x * 10) / 10, Math.round(e.pos.z * 10) / 10, owner]); while (mp.bx.length > 8) mp.bx.shift();
       mp.dirty = true;
     });
     const _explode = G.combat.explode;
@@ -7670,7 +7690,8 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     try { loadSfx(); } catch { /* generated sounds stay */ }
 
     function bankPut(peer, tm, k, id, name, d) {
-      if (peer === net.myPeer || remotes.has(peer)) return;
+      const base = String(peer).split('#')[0]; // "peer#team": kills that player made for their other side
+      if (base === net.myPeer || remotes.has(base)) return;
       const cur = mp.bank[peer];
       if (cur && cur[1] >= k) return;
       mp.bank[peer] = [tm, k, typeof id === 'string' ? id.slice(0, 40) : (cur && cur[2]) || '', typeof name === 'string' && name ? name.slice(0, 16) : (cur && cur[3]) || '', int(d)];
@@ -7701,14 +7722,24 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       if (first || jump || (R.alive && !wasAlive)) { R.pos.set(x, y, z); R.yaw = R.tyaw; R.pitch = R.tpitch; R.deadT = 0; }
       if (R.alive) R.deadT = 0;
       restyle(R, false);
-      if (cur) mp.last[R.peer] = { k: R.k, d: R.d, tm: R.tm };
+      R.kt = cur && Array.isArray(pr.kt) ? [0, 1].map(i => Array.isArray(pr.kt[i]) ? [int(pr.kt[i][0]), int(pr.kt[i][1])] : [0, 0]) : null;
+      if (cur) mp.last[R.peer] = { k: R.k, d: R.d, tm: R.tm, kt: R.kt };
       if (cur && mp.mode === 'tdm' && Array.isArray(pr.bk)) for (const b of pr.bk.slice(0, 32)) if (Array.isArray(b) && typeof b[0] === 'string' && (b[1] === 0 || b[1] === 1)) bankPut(b[0], b[1], int(b[2]), b[3], b[4], b[5]);
-      if (first) {
+      const ld = typeof pr.ld === 'string' ? pr.ld.slice(0, 16) : '', ldWas = R.ld || ''; R.ld = ld || ldWas;
+      const was = first ? mp.seen.get(R.peer) : null; if (was) mp.seen.delete(R.peer);
+      const back = was && performance.now() - was.t < 60000 ? was : null;
+      if (first && back) {
+        // the same player back within a minute (a dropped connection, a reload, a change of side): carry on from what was
+        // seen from them, so a death or a hit in this first message still counts
+        R.shSeq = back.sh; R.hSeq = back.h; R.dSeq = back.dl; R.bSeq = back.bx; R.gSeq = back.g; R.vSeq = maxSeq(pr.v);
+        resolve([R.id]);
+        feed(ld && back.ld && ld !== back.ld ? 'reloaded and is back' : R.tm !== back.tm && (R.tm === 0 || R.tm === 1) ? 'joined ' + TEAMS[R.tm].name : 'is back', who(R.peer));
+      } else if (first) {
         R.shSeq = Array.isArray(pr.sh) ? +pr.sh[0] || 0 : 0; R.hSeq = maxSeq(pr.h); R.dSeq = maxSeq(pr.dl); R.bSeq = maxSeq(pr.bx); R.gSeq = maxSeq(pr.g); R.vSeq = maxSeq(pr.v);
         resolve([R.id]);
         if (performance.now() - mp.joinedAt > 1500) feed('dropped in', who(R.peer));
         return;
-      }
+      } else if (ld && ldWas && ld !== ldWas) feed('reloaded and is back', who(R.peer)); // reloaded so fast the room never saw them go
       if (Array.isArray(pr.sh) && +pr.sh[0] !== R.shSeq) { R.shSeq = +pr.sh[0] || 0; remoteShot(R, pr.sh); }
       if (Array.isArray(pr.h)) for (const h of pr.h) if (Array.isArray(h) && +h[0] > R.hSeq) { R.hSeq = +h[0]; if (h[1] === net.myPeer) takeHit(R, h[2], h[3], h[4]); }
       if (Array.isArray(pr.dl)) for (const d of pr.dl) if (Array.isArray(d) && +d[0] > R.dSeq) { R.dSeq = +d[0]; remoteDown(R, typeof d[1] === 'string' ? d[1] : '', d[2], d[3] ? 1 : 0); }
@@ -7802,7 +7833,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
         const pr = p.presence;
         if (!pr || pr.m !== mp.mode || !Array.isArray(pr.p)) continue;
         let R = remotes.get(p.peer);
-        if (!R) { R = makeRemote(p.peer); remotes.set(p.peer, R); delete mp.bank[p.peer]; }
+        if (!R) { R = makeRemote(p.peer); remotes.set(p.peer, R); delete mp.bank[p.peer]; if (Array.isArray(pr.kt)) { delete mp.bank[p.peer + '#0']; delete mp.bank[p.peer + '#1']; } } // back: they send their own counts for both sides
         R.seen = frame;
         if (pr !== R.pr) ingest(R, p, pr);
         animate(R, dt, cam, W, H);
@@ -7817,7 +7848,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       ch.presence({
         m: mp.mode, tm: mp.team, p: [r2(P.pos.x), r2(P.pos.y), r2(P.pos.z)], r: [r3(P.yaw), r3(P.pitch)], st, hp: Math.round(P.health),
         w: knife.on ? 2 : window.__SALTLINE_GUNS.carry(G.weapon.current), ks: knife.seq, ln: r2(lean.v), lo: r2(lean.off), rd: mp.round, n: my.name || null, k: s.kills, d: s.deaths, sh: mp.shot, h: mp.hits.slice(), dl: mp.dl.slice(), bx: mp.bx.slice(), g: frag.sent.slice(),
-        am: window.__SALTLINE_GUNS.ammoWire(), vt: window.__SALTLINE_VAULT ? window.__SALTLINE_VAULT.wire() : null, c: myColor(), bk: mp.mode === 'tdm' ? Object.keys(mp.bank).map(k => [k, ...mp.bank[k]]) : null, uid: net.myId,
+        am: window.__SALTLINE_GUNS.ammoWire(), vt: window.__SALTLINE_VAULT ? window.__SALTLINE_VAULT.wire() : null, c: myColor(), bk: mp.mode === 'tdm' ? Object.keys(mp.bank).map(k => [k, ...mp.bank[k]]) : null, kt: mp.mode === 'tdm' ? tdmPer() : null, ld: LOAD_ID, uid: net.myId,
       }).then(() => { net.sent++; }, e => { net.err = 'match:' + (e && e.code || 'error'); });
     }
 
@@ -7827,6 +7858,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     hud.setTally = t => _setTally(mp.live ? mp.tally : t);
     function hudText() {
       if (!mp.live) return;
+      keepScore();
       const s = S();
       if (mp.mode === 'tdm') { const t = teamTotals(); mp.obj = 'Team play · ' + TEAMS[mp.team].name; mp.tally = `${inBreak() ? 'Next round ' + clock(breakLeft()) : clock(roundLeft())} · Red ${t[0]} · Blue ${t[1]}`; }
       else { mp.obj = 'Deathmatch'; mp.tally = `${inBreak() ? 'Next round ' + clock(breakLeft()) : clock(roundLeft())} · ${s.kills} ${s.kills === 1 ? 'kill' : 'kills'} · ${s.deaths} down`; }
@@ -7848,16 +7880,24 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     function liveRows() {
       const s = S(), rows = [{ me: true, name: my.name || shortName(net.myId, net.myPeer), k: s.kills, d: s.deaths, tm: mp.team, alive: mp.alive, css: myColor() }];
       for (const R of remotes.values()) rows.push({ me: false, peer: R.peer, id: R.id, name: R.name || 'Someone', k: R.k, d: R.d, tm: R.tm, alive: R.alive && !R.away, css: R.own || R.css || '#e8e4da' });
+      // kills a player made for the other side before changing it stay with that side, as a row of their own
+      if (mp.mode === 'tdm') {
+        const moved = (peer, id, name, tm, kt) => { if (!kt || (tm !== 0 && tm !== 1)) return; const o = 1 - tm; if (kt[o][0] > 0 || kt[o][1] > 0) rows.push({ me: false, left: true, moved: true, peer: peer + '#' + o, id, name: name + ' (moved to ' + TEAMS[tm].name + ')', k: kt[o][0], d: kt[o][1], tm: o, alive: false, css: '#e8e4da' }); };
+        moved(net.myPeer, net.myId, rows[0].name, mp.team, tdmPer());
+        for (const R of remotes.values()) moved(R.peer, R.id, R.name || 'Someone', R.tm, R.kt || (mp.last[R.peer] && mp.last[R.peer].kt));
+      }
       // one row per person: a kept score joins the row of whoever has the same player id or, failing that, the same name
       // (another device, cleared storage), on either side; two departures of one person make one "(left)" row
       if (mp.mode === 'tdm') for (const peer in mp.bank) {
         const [tm, k, id, name, d] = mp.bank[peer];
         if (tm !== 0 && tm !== 1) continue;
-        const key = n => String(n || '').replace(/ \(left\)$/, '').trim().toLowerCase(), nm = key(name), named = nm && nm !== 'someone';
-        const same = rows.find(r => !r.left && id && (r.me ? id === net.myId : r.id === id)) || (named && rows.find(r => !r.left && key(r.name) === nm))
-          || rows.find(r => r.left && ((id && r.id === id) || (named && key(r.name) === nm)));
+        const key = n => String(n || '').replace(/ \((left|moved to \w+)\)$/, '').trim().toLowerCase(), nm = key(name), named = nm && nm !== 'someone';
+        // only on the team the kills were made for: a player who came back on the other side gets a row of their own here
+        const same = rows.find(r => !r.left && r.tm === tm && id && (r.me ? id === net.myId : r.id === id)) || (named && rows.find(r => !r.left && r.tm === tm && key(r.name) === nm))
+          || rows.find(r => r.left && r.tm === tm && ((id && r.id === id) || (named && key(r.name) === nm)));
+        const there = !same && rows.find(r => !r.left && r.tm !== tm && ((id && (r.me ? id === net.myId : r.id === id)) || (named && key(r.name) === nm)));
         if (same) { same.k += k; same.d += d || 0; if (!same.left) { same.bk = (same.bk || 0) + k; same.bd = (same.bd || 0) + (d || 0); } }
-        else rows.push({ me: false, left: true, peer, id, name: (name || 'Someone') + ' (left)', k, d: d || 0, tm, alive: false, css: '#e8e4da' });
+        else rows.push({ me: false, left: true, peer, id, name: (name || 'Someone') + (there && (there.tm === 0 || there.tm === 1) ? ' (moved to ' + TEAMS[there.tm].name + ')' : ' (left)'), k, d: d || 0, tm, alive: false, css: '#e8e4da' });
       }
       return rows;
     }
@@ -7881,8 +7921,9 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       const shown = mp.breakOf === mp.round; mp.breakOf = -1;
       if (shown) mp.final = null; else roundEnd(8000);
       for (const m of ['dm', 'tdm']) { stats[m].kills = 0; stats[m].deaths = 0; }
+      stats.tdm.per = [[0, 0], [0, 0]]; stats.rd = next;
       mp.bank = {}; mp.last = {}; mp.round = next;
-      for (const R of remotes.values()) if (R.rd !== next) { R.k = 0; R.d = 0; }
+      for (const R of remotes.values()) if (R.rd !== next) { R.k = 0; R.d = 0; R.kt = null; }
       try { G.explosives.reset(); mp.lit.clear(); } catch { /* fine */ }
       refillFrags();
       respawn(false); // a new round is a clean start for everyone: new spawn point, full health, full ammo, down or not
@@ -7907,7 +7948,10 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       if (!ev.code || ev.code !== kb.scores || !mp.live || game.state !== 'playing') return;
       ev.preventDefault(); mp.board = ev.type === 'keydown';
     };
-    addEventListener('keydown', tabKey); addEventListener('keyup', tabKey); addEventListener('blur', () => { mp.board = false; });
+    addEventListener('keydown', tabKey); addEventListener('keyup', tabKey);
+    // Ctrl+R reloads the page in most browsers, and Ctrl is a crouch key: crouching while reloading the gun must not leave
+    // the match. The game still reloads the gun; pausing first (Esc) lets the page be reloaded on purpose.
+    addEventListener('keydown', ev => { if (mp.live && game.state === 'playing' && ev.ctrlKey && !ev.metaKey && ev.code === 'KeyR') ev.preventDefault(); }, true); addEventListener('blur', () => { mp.board = false; });
 
     /* ------------------------------------------------------------------ joining and leaving */
     function enter(mode, team) {
@@ -7915,8 +7959,19 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       try { G.audio && G.audio.resume && G.audio.resume(); } catch { /* fine */ }
       try { G.input.requestLock(); } catch { /* fine */ }
       mp.joining = true; mp.live = true; mp.mode = mode; mp.team = mode === 'tdm' ? team : -1; mp.alive = true; mp.joinedAt = performance.now();
-      if (mode === 'tdm' && stats.tdm.team !== team) { stats.tdm.kills = 0; stats.tdm.deaths = 0; stats.tdm.team = team; }
-      mp.bank = {}; mp.hits = []; mp.dl = []; mp.bx = []; frag.sent = []; mp.shot = null; mp.lit.clear(); mp.lastAttacker = null; mp.blastOwner = null; mp.board = false; mp.boardPin = false;
+      // counts from an earlier round belong to that round: a player who was in the menus when this one began starts at zero
+      if (stats.rd !== roundNow()) { for (const m of ['dm', 'tdm']) { stats[m].kills = 0; stats[m].deaths = 0; } stats.tdm.per = [[0, 0], [0, 0]]; stats.rd = roundNow(); }
+      // this tab was in this room earlier this round as the same player (a reload, a map change, a page the browser reloaded): its counts come back
+      const fresh = !stats[mode].kills && !stats[mode].deaths, kept = keptScore(mode);
+      if (kept && mode === 'tdm' && Array.isArray(kept.per)) { for (const i of [0, 1]) for (const j of [0, 1]) stats.tdm.per[i][j] = Math.max(stats.tdm.per[i][j], int(kept.per[i] && kept.per[i][j])); }
+      else if (kept && mode === 'dm') { stats.dm.kills = Math.max(stats.dm.kills, int(kept.k)); stats.dm.deaths = Math.max(stats.dm.deaths, int(kept.d)); }
+      // a change of side: what was made for the old team stays with it (stats.tdm.per, sent as kt); the new team's counts come back if this player was on it before
+      if (mode === 'tdm' && stats.tdm.team !== team) {
+        if (stats.tdm.team === 0 || stats.tdm.team === 1) stats.tdm.per[stats.tdm.team] = [stats.tdm.kills, stats.tdm.deaths];
+        stats.tdm.team = team; stats.tdm.kills = stats.tdm.per[team][0]; stats.tdm.deaths = stats.tdm.per[team][1];
+      } else if (kept && mode === 'tdm') { stats.tdm.kills = Math.max(stats.tdm.kills, stats.tdm.per[team][0]); stats.tdm.deaths = Math.max(stats.tdm.deaths, stats.tdm.per[team][1]); }
+      const restored = kept && fresh ? stats[mode].kills : 0;
+      mp.seen.clear(); mp.bank = {}; mp.hits = []; mp.dl = []; mp.bx = []; frag.sent = []; mp.shot = null; mp.lit.clear(); mp.lastAttacker = null; mp.blastOwner = null; mp.board = false; mp.boardPin = false;
       mp.round = roundNow(); mp.last = {}; mp.final = null; mp.warned = 0; mp.aloneSaid = false; mp.offT = 0;
       root.classList.add('mp-live'); mpui.classList.add('live'); hud.root.classList.add('mp-on'); killBox.textContent = ''; killRows.length = 0;
       for (const b of backBtns) b.textContent = 'Leave match';
@@ -7926,6 +7981,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
       respawn(true);
       hudText(); lobbyPresence();
       net.ch = net.room; net.named = false; mp.joining = false; mp.dirty = true;
+      if (restored > 0) feed('is back with ' + restored + (restored === 1 ? ' kill' : ' kills') + ' this round', who(net.myPeer)); // in the feed: the message line is taken by the mouse prompt after a reload
     }
     function toTitle() {
       const prev = game.state;
@@ -8045,7 +8101,7 @@ window.__SALTLINE_SFX={"ding":["data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPA
     }
     function fragOut(px, py, pz, vx, vy, vz, fuse) {
       spawnFrag(px, py, pz, vx, vy, vz, true, net.myPeer || '', fuse);
-      if (mp.live) { frag.sent.push([++frag.seq, r2(px), r2(py), r2(pz), r2(vx), r2(vy), r2(vz), r2(fuse)]); while (frag.sent.length > 3) frag.sent.shift(); mp.dirty = true; }
+      if (mp.live) { frag.sent.push([(frag.seq = nextSeq(frag.seq)), r2(px), r2(py), r2(pz), r2(vx), r2(vy), r2(vz), r2(fuse)]); while (frag.sent.length > 3) frag.sent.shift(); mp.dirty = true; }
     }
     // let go: thrown where you are looking, with whatever fuse is left. `drop` is for going down or pausing with the pin out
     function releaseFrag(drop) {

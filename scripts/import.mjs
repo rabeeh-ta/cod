@@ -14,12 +14,14 @@
 //   9. the hooks that let more guns in (scripts/gun-hooks.mjs)
 //  10. no typed radio (the T key and everything it drew, sent and read aloud); voice chat stays
 //  11. window.__SALTLINE_COLOR: the player's colour, settable from web/net.js
+//  12. the score hooks: kills and deaths right across reconnects, reloads, rounds and changes of side (scripts/score-hooks.mjs)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyMapHooks } from './map-hooks.mjs';
 import { applyGunHooks } from './gun-hooks.mjs';
 import { applyPerfHooks } from './perf-hooks.mjs';
+import { applyScoreHooks } from './score-hooks.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const src = resolve(process.cwd(), process.argv[2] || 'COD.html');
@@ -66,6 +68,7 @@ once("const myColor = () => my.color || PALETTE[hash(net.myId || net.myPeer || '
 html = applyMapHooks(html);
 html = applyGunHooks(html);
 html = applyPerfHooks(html);
+html = applyScoreHooks(html);
 
 const leftover = html.match(/blend-ed|felix|claude\.ai\/artifact/gi);
 if (leftover) throw new Error(`import: personal references left in the game: ${[...new Set(leftover)].join(', ')}`);
