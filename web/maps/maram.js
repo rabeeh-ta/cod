@@ -544,6 +544,20 @@ void main(){
      treats being inside its first interiorBoxes entry as being indoors (it dims the gun's light and swaps its
      reflections), so update() clears render.interiorEnv, which both of those wait for; the haze does not. */
   const AIR = { town: [BOUNDS.x0 - 4, -1, BOUNDS.z0 - 4, BOUNDS.x1 + 4, 18, BOUNDS.z1 + 4], townThick: 1.6 };
+  /* The game's sound reads interiorBoxes too: inside any of them every shot, step and impact goes through its shed reverb (the
+     outdoor one at a tenth), so the whole town echoed like a shed (heard 24 Nov). The sound's update never sees the air box;
+     the light still does. The audio is made after the level, so this is put in place from the first frame's update. */
+  function outdoorSound(G, box) {
+    const au = G.audio; if (!au || !au.update || au._airHidden) return;
+    const up = au.update; au._airHidden = true;
+    au.update = function (dt) {
+      const lv = G.level, all = lv && lv.interiorBoxes;
+      if (!Array.isArray(all) || !all.includes(box)) return up.call(this, dt);
+      const rest = all.filter(b => b !== box); lv.interiorBoxes = rest;
+      if (!rest.length && au.setInterior) au.setInterior(0);      // an empty list leaves the sound's last answer standing
+      try { return up.call(this, dt); } finally { lv.interiorBoxes = all; }
+    };
+  }
   function makeAir(G) {
     const T = G.THREE, box = { min: new T.Vector3(), max: new T.Vector3() }, zones = COVER.map(c => ({ min: new T.Vector3(c[0], c[1], c[2]), max: new T.Vector3(c[3], c[4], c[5]) }));
     const tune = G.render.tune, thick = tune && Object.keys(tune).find(k => k.startsWith('volInterior'));        // how much thicker the air in the box is
@@ -893,6 +907,7 @@ void main(){
       update(dt) {
         hold(); lift(); guard();
         if (G.render.interiorEnv) G.render.interiorEnv = null;       // the town is not indoors (see AIR)
+        outdoorSound(G, air.box);                                     // nor to the ears
         clock += dt; motes.update(clock); beams.update(clock); palms.update(clock);
         if (G.render.sunDir && G.camera) { const d = G.camera.getWorldDirection(fwd), e = Math.max(0, d.x * G.render.sunDir.x + d.z * G.render.sunDir.z); fill += (1.1 + 0.6 * e * e - fill) * Math.min(1, dt * 2.5); G.render.viewFill = fill; }
       },

@@ -2015,9 +2015,10 @@ void main(){
   float v = asin(clamp(d.y, -1.0, 1.0)) * 0.31830989 + 0.5, vb = (v - ${PHOTO.band[0]}) / ${PHOTO.band[1]};
   vec3 col = texture2D(tPano, vec2(u, v)).rgb, band = texture2D(tBand, vec2(u, clamp(vb, 0.002, 0.998))).rgb;
   col = mix(col, band, uBand * smoothstep(0.0, 0.06, vb) * smoothstep(1.0, 0.94, vb));
-  if (uEnv < 0.5) { float lb = dot(col, vec3(0.2126, 0.7152, 0.0722)), open = smoothstep(0.015, 0.18, d.y) * smoothstep(-0.03, 0.05, col.b - col.r);   // the open sky: above the hills, bluer than red
-    vec3 deep = vec3(0.26, 0.5, 1.0) * (lb / 0.494) * mix(1.0, 0.82, smoothstep(0.25, 0.9, d.y));                                                   // the same light, a deep clear blue, deeper overhead
-    col = mix(col, deep, open * mix(0.45, 0.8, smoothstep(0.04, 0.5, d.y))); }
+  if (uEnv < 0.5) { float lb = dot(col, vec3(0.2126, 0.7152, 0.0722)), open = smoothstep(0.0, 0.12, d.y) * smoothstep(-0.03, 0.05, col.b - col.r);   // the open sky: above the hills, bluer than red (the sun and its glare stay white)
+    vec3 hue = mix(vec3(0.30, 0.58, 1.0), vec3(0.09, 0.30, 1.0), smoothstep(0.05, 0.7, d.y));                                                      // a clear light blue at the hills to a deep cobalt overhead (he asked for a very blue sky, 24 Nov)
+    vec3 deep = hue * (lb / 0.494) * mix(1.0, 0.85, smoothstep(0.25, 0.9, d.y));                                                                  // the photograph's own light in that blue, a little darker overhead
+    col = mix(col, deep, open * mix(0.6, 0.95, smoothstep(0.04, 0.5, d.y))); }
   float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
   col *= uGain * (1.0 + 3.0 * pow(l, 5.0));
   col = mix(col, min(col, vec3(6.0)), uEnv);
@@ -2249,6 +2250,22 @@ void main(){
     const NS = S.length, NU = U.length;
     return { stones: NS, tufts: NU, set(q) { stones.count = q >= 3 ? NS : q === 2 ? Math.floor(NS * 0.35) : 0; stones.visible = stones.count > 0; stones.castShadow = q >= 3;
       tufts.count = q >= 3 ? NU : q === 2 ? Math.floor(NU * 0.4) : 0; tufts.visible = tufts.count > 0; } };
+  }
+
+  /* The game's sound also reads interiorBoxes: a listener inside any of them is indoors, and every shot, step and impact goes
+     through its shed reverb (the outdoor one at a tenth). The air box covers the whole compound, so the whole map echoed like a
+     shed (he heard it, 24 Nov). Nothing here is indoors, so the sound's update never sees the air box; the light still does.
+     The audio is made after the level, so this is put in place from the first frame's update. */
+  function outdoorSound(G, box) {
+    const au = G.audio; if (!au || !au.update || au._airHidden) return;
+    const up = au.update; au._airHidden = true;
+    au.update = function (dt) {
+      const lv = G.level, all = lv && lv.interiorBoxes;
+      if (!Array.isArray(all) || !all.includes(box)) return up.call(this, dt);
+      const rest = all.filter(b => b !== box); lv.interiorBoxes = rest;
+      if (!rest.length && au.setInterior) au.setInterior(0);      // an empty list leaves the sound's last answer standing
+      try { return up.call(this, dt); } finally { lv.interiorBoxes = all; }
+    };
   }
 
   function makeAir(G) {
@@ -2644,6 +2661,7 @@ void main(){
           clutter.set(qn); } }
         hold(); if ((frame++ & 1) === 0) guard(); fall(); clock += dt; plants.update(clock); beams.update(clock); motes.update(clock); sock.update(clock, dt); cloth.update(clock, dt); if (water) water.update(); for (const sp of spinners) sp.g.rotation.y = clock * sp.speed; mats.wind.value = clock;
         if (G.render.interiorEnv) G.render.interiorEnv = null;          // the air box is not indoors (see makeAir)
+        outdoorSound(G, air.box);                                        // nor to the ears
         if (G.render.sunDir && G.camera) { const d = G.camera.getWorldDirection(fwd), e = Math.max(0, d.x * G.render.sunDir.x + d.z * G.render.sunDir.z); fill += (1.1 + 0.6 * e * e - fill) * Math.min(1, dt * 2.5); G.render.viewFill = fill; }
       },
     };
