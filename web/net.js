@@ -533,7 +533,13 @@
       /* the mark, and "Latest updates!" beside it (under it where there is no room) */
       .fe-wordrow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 28px; margin: 14px 0 30px; }
       .fe-word { margin: 0; font: 900 clamp(72px, 11vw, 148px)/.82 var(--f-display, Impact, sans-serif); letter-spacing: .01em; }
-      .fe-btn.fe-news { display: inline-flex; align-items: center; gap: 10px; border-color: rgba(255,179,71,.5); }
+      .fe-btn.fe-news { position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 10px; border-color: rgba(255,179,71,.5); }
+      /* a shimmer every 3 s: an even band of light with soft edges crosses the button over its label and leaves it
+         completely (his sweep: "evened out", "completely out", "not stuck on the right"); fast launch, long settle */
+      .fe-btn.fe-news::after { content: ''; position: absolute; inset: 0; pointer-events: none; transform: translateX(-110%);
+        background: linear-gradient(105deg, rgba(255,201,119,0) 18%, rgba(255,201,119,.34) 38%, rgba(255,201,119,.34) 62%, rgba(255,201,119,0) 82%);
+        animation: fe-shimmer 3s infinite; }
+      @keyframes fe-shimmer { 0% { transform: translateX(-110%); animation-timing-function: cubic-bezier(.25, 0, 0, 1); } 37%, 100% { transform: translateX(110%); } }
       .fe-news i { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--signal, #ffb347); }
       .fe-btn.fe-news:hover:not(:disabled) { border-color: var(--signal, #ffb347); color: var(--signal, #ffb347); }
       .fe-btn.fe-news:active:not(:disabled) { border-color: var(--signal, #ffb347); color: var(--signal, #ffb347); background: rgba(34,27,16,.9); }
@@ -746,6 +752,7 @@
         .fe-map:hover:not(:disabled) img, .fe-map:active:not(:disabled) img { transform: none; }
         .fe-item:hover:not(:disabled) i, .fe-item:focus-visible i { transform: none; }
         .net-live i, .fe-status.busy::before { animation: none; }
+        .fe-btn.fe-news::after { animation: none; display: none; }
       }
 
       .net-talk { position: fixed; z-index: 800; left: var(--gl, 16px); top: calc(max(14px, env(safe-area-inset-top)) + 84px); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
