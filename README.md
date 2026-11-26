@@ -56,6 +56,7 @@ See [CLAUDE.md](CLAUDE.md) for the Cloudflare stack.
 |---|---|---|
 | Game | `web/index.html` | The game, served as a static asset |
 | Network adapter | `web/net.js` | Stands in for the claude.ai runtime the game was written for, plus the first screen and voice (WebRTC, peer to peer) |
+| App install | `web/manifest.webmanifest`, `web/icons/` | Makes the site installable as a desktop app: Chrome or Edge (the install button in the address bar, or the menu's Cast, save and share > Install page as app), Safari on a Mac (File > Add to Dock). `net.js` puts the manifest and icon tags in the page. No service worker, so an installed app always loads the live game |
 | Grenade path | `web/fragpath.js` | The path of a cooked grenade: the game's own throw flown through the game's own steps (fixed 1/120 s since gun hook 24), drawn as dots to the first hit, a ring there and a mark where it ends up |
 | Pause map | `web/fullmap.js` | The whole map on the pause screen, from the same walk grid as the minimap, north up, with you, your team, the ammo sets and recent shooters |
 | Map choice | `web/maps.js` | Decides which map this page load builds (a link, the room, or the player's last pick) before the game starts |
