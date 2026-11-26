@@ -17,6 +17,18 @@
 (() => {
   'use strict';
 
+  /* Installable as an app (Chrome / Edge: the install button in the address bar; Safari on a Mac: File > Add to Dock).
+     web/index.html is generated, so the tags go in from here. No service worker: the game deploys on every push and a
+     cached copy would play an old client against a new server. */
+  for (const [tag, attrs] of [
+    ['link', { rel: 'manifest', href: '/manifest.webmanifest' }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/icons/favicon-32.png' }],
+    ['link', { rel: 'apple-touch-icon', href: '/icons/apple-touch-icon.png' }],
+    ['meta', { name: 'theme-color', content: '#0b0d0f' }],
+    ['meta', { name: 'apple-mobile-web-app-title', content: 'Saltline' }],
+    ['meta', { name: 'mobile-web-app-capable', content: 'yes' }],
+  ]) { const e = document.createElement(tag); for (const k in attrs) e.setAttribute(k, attrs[k]); document.head.appendChild(e); }
+
   for (const src of ['/touch.js', '/fullmap.js', '/fragpath.js', '/bag.js', '/news.js']) { const s = document.createElement('script'); s.src = src; s.async = true; document.head.appendChild(s); }
 
   const CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
